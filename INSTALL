@@ -1,0 +1,25 @@
+I THINK THIS IS AN OLD FILE!!! CHECK THE MANUAL FOR BETTER DETAILS!
+
+Required packages:
+------------------
+
+python >= 2.6.5
+
+numpy
+scipy
+matplotlib
+cuda (optional)
+pycuda (optional)
+
+#########################################
+To install:
+-----------
+
+1. Place the contents of this directory in a folder called:
+  /path/to/alis/
+
+2. Add the following line to your .cshrc file:
+
+  alias alis 'python /path/to/alis/alis.py'
+
+That's it!
