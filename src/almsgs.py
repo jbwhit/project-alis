@@ -34,7 +34,7 @@ class msgs:
 		self._verbose = 2
 #		return
 
-	def alisheader(prognm):
+	def alisheader(self, prognm, verbose=2):
 		header = "##  "
 		header += colors.start + colors.white_GR + "ALIS : "
 		header += "Absorption LIne Software v1.0" + colors.end + "\n"
@@ -43,7 +43,7 @@ class msgs:
 		header += "python %s [options] model.mod" % (prognm)
 		return header
 
-	def signal_handler(signalnum, handler):
+	def signal_handler(self, signalnum, handler):
 		if signalnum == 2:
 			info("Ctrl+C was pressed. Ending processes...")
 			sys.exit()

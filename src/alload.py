@@ -3,7 +3,7 @@ import sys
 import imp
 import copy
 import getopt
-import pyfits
+import astropy.io.fits as pyfits
 import numpy as np
 import almsgs
 from multiprocessing import cpu_count
@@ -38,31 +38,33 @@ def cpucheck(ncpu,curcpu=0,verbose=2):
 				if ncpu != curcpu: msgs.info("Setting %i CPUs" % (ncpu),verbose=verbose)
 	return ncpu
 
-def optarg(pathname, last_updated, argv=None, verbose=2):
-	def usage(argflag):
-		print "\n#####################################################################"
-		print msgs.alisheader(argflag['run']['prognm'],verbose=2)
-		print "##  -----------------------------------------------------------------"
-		print "##  Options: (default values in brackets)"
-		print "##   -c or --cpus      : (all) Number of cpu cores to use"
-		print "##   -f or --fits      : Write model fits to *.dat files"
-		print "##   -g or --gpu       : enable GPU multiprocessing"
-		print "##   -h or --help      : Print this message"
-		print "##   -j or --justplot  : Plot the data and input model - don't fit"
-		print "##   -l or --labels    : Label absorption components when plotting"
-		print "##   -m or --model     : Write an output model with fitting results"
-		print "##   -p or --plot      : (%s) plot model fits with MxN panels," % (argflag['plot']['dims'])
-		print "##                             for no screen plots use: -p 0"
-		print "##   -r or random      : Number of random simulations to perform"
-		print "##   -s or --startid   : Starting ID number for the simulations"
-		print "##   -v or --verbose   : (2) Level of verbosity (0-2)"
-		print "##   -w or --writeover : If output files exist, write over them"
-		print "##   -x or --xaxis     : (0) Plot observed/rest wavelength [0/1]"
-		print "##                           or velocity [2]"
-		print "##  -----------------------------------------------------------------"
-		print "##  %s" % last_updated
-		print "#####################################################################\n"
-		sys.exit()
+
+def usage(argflag):
+	print "\n#####################################################################"
+	print msgs.alisheader(argflag['run']['prognm'],verbose=2)
+	print "##  -----------------------------------------------------------------"
+	print "##  Options: (default values in brackets)"
+	print "##   -c or --cpus      : (all) Number of cpu cores to use"
+	print "##   -f or --fits      : Write model fits to *.dat files"
+	print "##   -g or --gpu       : enable GPU multiprocessing"
+	print "##   -h or --help      : Print this message"
+	print "##   -j or --justplot  : Plot the data and input model - don't fit"
+	print "##   -l or --labels    : Label absorption components when plotting"
+	print "##   -m or --model     : Write an output model with fitting results"
+	print "##   -p or --plot      : ({0:s}) plot model fits with MxN panels,".format(argflag['plot']['dims'])
+	print "##                             for no screen plots use: -p 0"
+	print "##   -r or random      : Number of random simulations to perform"
+	print "##   -s or --startid   : Starting ID number for the simulations"
+	print "##   -v or --verbose   : (2) Level of verbosity (0-2)"
+	print "##   -w or --writeover : If output files exist, write over them"
+	print "##   -x or --xaxis     : (0) Plot observed/rest wavelength [0/1]"
+	print "##                           or velocity [2]"
+	print "##  -----------------------------------------------------------------"
+	print "##  {0:s}".format(argflag['run']['last_update'])
+	print "#####################################################################\n"
+	sys.exit()
+
+def optarg(pathname, argv=None, verbose=2):
 
 	# Load the default settings
 	prgn_spl = pathname.split('/')
@@ -171,7 +173,7 @@ def load_settings(fname,verbose=2):
 		"""
 		Initialise the default settings called argflag
 		"""
-		rna = dict({'prognm':'alis.py', 'atomic':'atomic.xml', 'modname':'model.mod', 'convergence':False, 'convnostop':False, 'convcriteria':0.2, 'ncpus':-1, 'ngpus':None, 'nsubpix':5, 'warn_subpix':100, 'renew_subpix':False, 'blind':True, 'bintype':'km/s', 'logn':True})
+		rna = dict({'prognm':'alis.py', 'last_update':'Last updated 6th April 2013', 'atomic':'atomic.xml', 'modname':'model.mod', 'convergence':False, 'convnostop':False, 'convcriteria':0.2, 'ncpus':-1, 'ngpus':None, 'nsubpix':5, 'warn_subpix':100, 'renew_subpix':False, 'blind':True, 'bintype':'km/s', 'logn':True})
 		csa = dict({'miniter':0, 'maxiter':20000, 'xtol':1.0E-10, 'ftol':1.0E-10, 'gtol':1.0E-10, 'fstep':1.0})
 		pla = dict({'dims':'3x3', 'fits':True, 'xaxis':'observed', 'labels':False, 'only':False, 'pages':'all'})
 		opa = dict({'model':True, 'fits':False, 'onefits':False, 'overwrite':False, 'sm':False, 'verbose':2, 'reletter':False, 'covar':""})

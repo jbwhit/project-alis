@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 """
-Fit absorption lines
+Absorption LIne Software
 """
-last_updated='Last updated 25th March 2013'
 
 # Import standard libraries
 import os
@@ -553,11 +552,11 @@ def alis(modelfile=None, parlines=[], datlines=[], modlines=[], data=None, verbo
 	msgs.info("calling ALIS...", verbose=verbose)
 	debug = True
 	if debug:
-		argflag = alload.optarg(os.path.realpath(__file__), last_updated, verbose=verbose)
+		argflag = alload.optarg(os.path.realpath(__file__), verbose=verbose)
 		return ClassMain(argflag, parlines=parlines, datlines=datlines, modlines=modlines, modelfile=modelfile, data=data, verbose=verbose)
 	else:
 		try:
-			argflag = alload.optarg(os.path.realpath(__file__), last_updated, verbose=verbose)
+			argflag = alload.optarg(os.path.realpath(__file__), verbose=verbose)
 			return ClassMain(argflag, parlines=parlines, datlines=datlines, modlines=modlines, modelfile=modelfile, data=data, verbose=verbose)
 		except Exception:
 			# There is a bug in the code, print the file and line number of the error.
@@ -580,17 +579,17 @@ if __name__ == "__main__":
 		msgs.bug("Output best fits (either .dat or .fits) file should have every line of input")
 		msgs.bug("Still haven't written a onefits for saving fits files... or multiple fits files even!")
 		msgs.bug("If emission is not specified for a specid before absorption (in a model with several specid's), the specid printed as an error is always one before")
-		argflag = alload.optarg(os.path.realpath(__file__), last_updated, argv=sys.argv[1:])
+		argflag = alload.optarg(os.path.realpath(__file__), argv=sys.argv[1:])
 		# Assign filelist:
-		if sys.argv[-1].split('.')[-1] != 'mod': alload.optarg.usage(argflag)
+		if sys.argv[-1].split('.')[-1] != 'mod': alload.usage(argflag)
 		else:
 			argflag['run']['modname'] = sys.argv[-1]
 		ClassMain(argflag)
 	else:
 		try:
-			argflag = alload.optarg(os.path.realpath(__file__), last_updated, argv=sys.argv[1:])
+			argflag = alload.optarg(os.path.realpath(__file__), argv=sys.argv[1:])
 			# Assign filelist:
-			if sys.argv[-1].split('.')[-1] != 'mod': alload.optarg.usage(argflag)
+			if sys.argv[-1].split('.')[-1] != 'mod': alload.usage(argflag)
 			else:
 				argflag['run']['modname'] = sys.argv[-1]
 			ClassMain(argflag)
@@ -603,5 +602,5 @@ if __name__ == "__main__":
 				line_no =  str(traceback.tb_lineno(tb))
 				tb = tb.tb_next
 			filename=filename.split('/')[-1]
-			almsgs.msgs.bug("There appears to be a bug on Line "+line_no+" of "+filename+" with error:"+msgs.newline()+str(ev)+msgs.newline()+"---> please contact the author")
+			msgs.bug("There appears to be a bug on Line "+line_no+" of "+filename+" with error:"+msgs.newline()+str(ev)+msgs.newline()+"---> please contact the author")
 

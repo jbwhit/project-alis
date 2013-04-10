@@ -117,7 +117,7 @@ class vFWHM(alfunc_base.Base) :
 #		else: flub = y
 #		return flub
 
-	def getminmax(self, par, fitrng, Nsig=5.0):
+	def getminmax(self, par, fitrng, Nsig=10.0):
 		"""
 		This definition is only used for specifying the
 		FWHM Resolution of the data.
