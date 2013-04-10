@@ -5,7 +5,7 @@ import shutil
 import numpy as np
 from ihooks import BasicModuleLoader as srcloader
 # ALIS code
-from alis_v0 import myfunct_wrap
+from alis import myfunct_wrap
 from alcsmin import alfit
 import almsgs
 import alsave

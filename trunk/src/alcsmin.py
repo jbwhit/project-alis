@@ -32,7 +32,7 @@ RJC: This is a modified version of MPFIT, which allows CPU multiprocessing
 import numpy
 import types
 import signal
-import scipy.linalg
+#import scipy.linalg
 import almsgs
 from alsave import print_model
 from multiprocessing import Pool as mpPool
@@ -58,16 +58,16 @@ def _unpickle_method(func_name, obj, cls):
 			break
 	return func.__get__(obj, cls)
 
-def _pickle_fortran(fortran):
-	return _unpickle_fortran, ()
+#def _pickle_fortran(fortran):
+#	return _unpickle_fortran, ()
 
-def _unpickle_fortran():
-	return
+#def _unpickle_fortran():
+#	return
 
 class alfit(object):
 
-	blas_enorm32, = scipy.linalg.get_blas_funcs(['nrm2'],numpy.array([0],dtype=numpy.float32))
-	blas_enorm64, = scipy.linalg.get_blas_funcs(['nrm2'],numpy.array([0],dtype=numpy.float64))
+#	blas_enorm32, = scipy.linalg.get_blas_funcs(['nrm2'],numpy.array([0],dtype=numpy.float32))
+#	blas_enorm64, = scipy.linalg.get_blas_funcs(['nrm2'],numpy.array([0],dtype=numpy.float64))
 
 
 	def __init__(self, fcn, xall=None, functkw={}, parinfo=None,
@@ -486,10 +486,10 @@ class alfit(object):
 		# the returned value, not by the precision of the input array
 		if numpy.array([fvec]).dtype.itemsize>4:
 			self.machar = machar(double=1)
-			self.blas_enorm = alfit.blas_enorm64
+#			self.blas_enorm = alfit.blas_enorm64
 		else:
 			self.machar = machar(double=0)
-			self.blas_enorm = alfit.blas_enorm32
+#			self.blas_enorm = alfit.blas_enorm32
 		machep = self.machar.machep
 		
 		m = len(fvec)
@@ -501,7 +501,7 @@ class alfit(object):
 
 		# Allow multiprocessing to call funcderiv in this class
 		pickle(MethodType, _pickle_method, _unpickle_method)
-		pickle(type(self.blas_enorm), _pickle_fortran, _unpickle_fortran)
+#		pickle(type(self.blas_enorm), _pickle_fortran, _unpickle_fortran)
 
 		# Initialize Levelberg-Marquardt parameter and iteration counter
 
@@ -1085,7 +1085,7 @@ class alfit(object):
 		pool = mpPool(processes=self.ncpus)
 		async_results = []
 		mydict = self.__dict__.copy()
-		mydict['blas_enorm'] = None  # Can't pass a fortran object through Pool.
+#		mydict['blas_enorm'] = None  # Can't pass a fortran object through Pool.
 		for j in range(n):
 			xp = xall.copy()
 			xp[ifree[j]] += h[j]

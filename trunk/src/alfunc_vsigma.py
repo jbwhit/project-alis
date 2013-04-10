@@ -117,7 +117,7 @@ class vSigma(alfunc_base.Base) :
 #		else: flub = y
 #		return flub
 
-	def getminmax(self, par, fitrng, Nsig=15.0):
+	def getminmax(self, par, fitrng, Nsig=10.0):
 		"""
 		This definition is only used for specifying the
 		Resolution of the data.
@@ -199,9 +199,10 @@ class vSigma(alfunc_base.Base) :
 		################
 		isspl=instr.split()
 		# Seperate the parameters from the keywords
-		param, kywrd = [], []
+		kywrd = []
 		keywdk = self._keywd.keys()
 		keywdk[:] = (kych for kych in keywdk if kych[:] != 'input') # Remove the keyword 'input'
+		param = [None for all in range(self._pnumr)]
 		parid = [i for i in range(self._pnumr)]
 		for i in range(len(isspl)):
 			if "=" in isspl[i]:
@@ -210,7 +211,9 @@ class vSigma(alfunc_base.Base) :
 					self._keywd['input'][kwspl[0]]=1
 					kywrd.append(isspl[i])
 				else: msgs.error("Keyword '"+isspl[i]+"' is unknown for -"+msgs.newline()+self._idstr+"   "+instr)
-			else: param.append(isspl[i])
+			else:
+				param[i] = isspl[i]
+				self._keywd['input'][self._parid[i]]=1
 		# Do some quick checks
 		if len(param) != self._pnumr:
 			msgs.error("Incorrect number of parameters (should be "+str(self._pnumr)+"):"+msgs.newline()+self._idstr+"   "+instr)
@@ -278,9 +281,9 @@ class vSigma(alfunc_base.Base) :
 		Return the parameters for a Gaussian function to be used by 'call'
 		The only thing that should be changed here is the parb values
 		"""
-		parinf=[]
 		levadd=0
 		params=np.zeros(self._pnumr)
+		parinf=[]
 		for i in range(self._pnumr):
 			if mp['mtie'][ival][i] != -1:
 				getid = mp['tpar'][mp['mtie'][ival][i]][1]
@@ -288,7 +291,7 @@ class vSigma(alfunc_base.Base) :
 				getid = level+levadd
 				levadd+=1
 			params[i] = self.parin(i, p[getid])
-			if mp['mfix'][ival][i] == 0: parinf.append(getid)
+			if mp['mfix'][ival][i] == 0: parinf.append(level+levadd) # If parameter not fixed, append it to the influence array
 		if nexbin is not None:
 			if params[0] == 0: return params, 1
 			if nexbin[0] == "km/s": return params, int(round(nexbin[1]/params[0] + 0.5))

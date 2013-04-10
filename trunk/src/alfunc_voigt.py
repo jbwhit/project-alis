@@ -5,7 +5,7 @@ import alfunc_base
 #import pycuda.driver as cuda
 #import pycuda.autoinit
 #from pycuda.compiler import SourceModule
-from astropy.io.vo.table import parse_single_table
+from astropy.io.votable.table import parse_single_table
 msgs=almsgs.msgs()
 
 class Voigt(alfunc_base.Base) :

@@ -530,8 +530,10 @@ class Base :
 
 # Import all of the functions used in alis
 import alfunc_brokenpowerlaw
+import alfunc_chebyshev
 import alfunc_constant
 import alfunc_gaussian
+import alfunc_legendre
 import alfunc_linear
 import alfunc_polynomial
 import alfunc_powerlaw
@@ -552,8 +554,10 @@ def call(prgname="",getfuncs=False,getinst=False,verbose=2):
 	# Add your new function to the following:
 	fd = dict({ 'Afwhm'          : alfunc_afwhm.AFWHM,
 				'brokenpowerlaw' : alfunc_brokenpowerlaw.BrokenPowerLaw,
+				'chebyshev'      : alfunc_chebyshev.Chebyshev,
 				'constant'       : alfunc_constant.Constant,
 				'gaussian'       : alfunc_gaussian.Gaussian,
+				'legendre'       : alfunc_legendre.Legendre,
 				'linear'         : alfunc_linear.Linear,
 				'polynomial'     : alfunc_polynomial.Polynomial,
 				'powerlaw'       : alfunc_powerlaw.PowerLaw,
