@@ -136,7 +136,7 @@ class vFWHM(alfunc_base.Base) :
 		# Convert the input parameters to the parameters used in call
 		pin = [0.0 for all in par]
 		for i in range(len(par)):
-			tval=par[i].lstrip('.0123456789')
+			tval=par[i].lstrip('+-.0123456789')
 			if tval[0:2] in ['E+', 'e+', 'E-', 'e-']: # Scientific Notation is used.
 				tval=tval[2:].lstrip('.0123456789')
 			parsnd=float(par[i].rstrip(tval))

@@ -6,10 +6,13 @@ run  bintype      km/s			# Set the type of pixels to use -- If pixels have const
 run  blind        True			# Run a blind analysis -- In order to print out the best-fitting model, this must be set to False.
 run  convcriteria 0.2           # Convergence criteria in units of the parameter error
 run  convnostop   False         # Continue to reduce the chi-squared stopping criteria until the parameters have converged
+run  limpar       False         # If an initial parameter's value is outside the model limits, set the initial value to the limit. Otherwise, and error is raised.
 run  logn         True			# Use the log of the column density (True) or the column density (False)
 run  ncpus        -1			# Number of CPUs to use (-1 means all bar one CPU, -2 means all bar two CPUs)
 run  ngpus        0				# Number of processes to send to the GPU/GPUs (must be >= 0)
 run  nsubpix      5				# Number of sub-pixels per 1 standard deviation to interpolate all models over -- higher values give higher precision.
+run  nsubmin      5				# Minimum number of sub-pixels per 1 pixel to interpolate all models over -- higher values give higher precision.
+run  nsubmax      21			# Maximum number of sub-pixels per 1 pixel to interpolate all models over -- higher values give higher precision.
 run  renew_subpix False         # If True, the subpixellation will be calculated after every iteration
 run  warn_subpix  100			# If the number of sub-pixels exceeds this amount, the user will be warned.
 # CHI-SQUARED ANALYSIS
@@ -27,6 +30,7 @@ plot  dims         3x3          # Plotting dimensions (ROWSxCOLUMNS)
 #plot  xaxis        observed     # what to plot: 'observed', 'rest', or 'velocity'
 # OUTPUT
 out  covar        ""			# Output the covariance matrix (No output if the argument is "")
+out  convtest     ""			# Output the details of the convergence test (No output if the argument is "")
 out  fits         False			# Output the best fitting model fits?
 out  onefits      False			# Output the best fitting models to a single fits file?
 out  model        True			# Output the best fitting model parameters?

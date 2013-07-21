@@ -9,18 +9,51 @@ from matplotlib import cm as pltcm
 from alutils import getreason
 msgs=almsgs.msgs()
 
-def save_asciifits(fname, wave, flux, error, model):
+def save_asciifits(fname, slf, arr, model):
 	"""
 	Save the best-fitting model into an ascii file.
 	"""
-	np.savetxt(fname+".dat", np.transpose(( wave, flux, error, model )) )
+	sp, sn, ll, lu = arr
+	wfek = slf._datopt['columns'][sp][sn].keys()
+	maxn=0
+	for i in wfek:
+		if slf._datopt['columns'][sp][sn][i] > maxn: maxn = slf._datopt['columns'][sp][sn][i]
+	data = np.zeros((lu-ll,maxn+2))
+	for i in wfek:
+		if slf._datopt['columns'][sp][sn][i] == -1: continue
+		num = slf._datopt['columns'][sp][sn][i]
+		if   i == 'wave':
+			data[:,num] = slf._wavefull[sp][ll:lu]
+		elif i == 'flux':
+			data[:,num] = slf._fluxfull[sp][ll:lu]
+		elif i == 'error':
+			data[:,num] = slf._fluefull[sp][ll:lu]
+		elif i == 'continuum':
+			data[:,num] = slf._contfinal[sp][ll:lu]
+		elif i == 'zerolevel':
+			data[:,num] = slf._zerofinal[sp][ll:lu]
+		elif i == 'fitrange':
+			out = np.zeros(lu-ll).astype(np.float64)
+			w = np.where((slf._wavefull[sp][ll:lu] >= slf._posnfit[sp][2*sn+0]) & (slf._wavefull[sp][ll:lu] <= slf._posnfit[sp][2*sn+1]))
+			out[w] = np.in1d(slf._wavefull[sp][ll:lu][w], slf._wavefit[sp]).astype(np.float64)
+			data[:,num] = out
+		elif i == 'systematics':
+			data[:,num] = slf._systfull[sp][ll:lu]
+		elif i == 'resolution':
+			msgs.bug("I haven't completed writing out 'resolution' to file yet... sorry")
+			data[:,num] = np.zeros(lu-ll)
+		else:
+			msgs.bug("I didn't expect the keyword '{0:s}' when saving fits file -".format(i)+msgs.newline()+fname+".dat")
+	data[:,-1] = model
+	# Save the file
+	np.savetxt(fname+".dat", data )
 	return
 
 def save_fitsfits():
 	"""
 	Save the best-fitting model into fits files.
 	"""
-
+	msgs.error("Fits file output has not been implemented yet.")
 
 def save_onefits(fname, wvarr, fxarr, erarr, mdarr):
 	"""
@@ -45,8 +78,10 @@ def save_modelfits(slf):
 				lu = slf._posnfull[sp][sn+1]
 				maxval = np.max(slf._modfinal[sp][ll:lu])
 				if maxval > modmax: modmax = maxval
-		peakerr = modmax/slf._argflag['generate']['peaksnr']
-		objterr = np.sqrt(peakerr**2 - modmax*slf._argflag['generate']['skyfrac'])
+		peakerr = 1.0/slf._argflag['generate']['peaksnr']
+		if peakerr**2 < slf._argflag['generate']['skyfrac']**2:
+			msgs.error("The following condition must hold for generated data:"+msgs.newline()+"skyfrac < 1/peaksnr")
+		objterr = modmax*np.sqrt(peakerr**2 - (slf._argflag['generate']['skyfrac'])**2)
 		objtsnr = modmax/objterr
 		slf._fluxfull = copy.deepcopy(slf._modfinal)
 	# Now iterate through the spectra and save the output
@@ -59,11 +94,11 @@ def save_modelfits(slf):
 			fspl = fname.split('.')
 			if slf._argflag['generate']['data']:
 				if os.path.exists(slf._snipnames[sp][sn]):
-					fnoext = fname.rstrip('.'+fspl[-1])+'_model'
+					fnoext = '.'.join(fspl[:-1])+'_model'
 				else:
-					fnoext = fname.rstrip('.'+fspl[-1])
+					fnoext = '.'.join(fspl[:-1])
 			else:
-				fnoext = fname.rstrip('.'+fspl[-1])+'_fit'
+				fnoext = '.'.join(fspl[:-1])+'_fit'
 			an = np.where(fit_fnames == fnoext)
 			if np.size(an) != 0: # The same snip is used more than once as input
 				un = np.where(usdtwice == fnoext)
@@ -84,45 +119,57 @@ def save_modelfits(slf):
 			if slf._argflag['generate']['data']:
 				if not os.path.exists(slf._snipnames[sp][sn]):
 					if slf._argflag['generate']['peaksnr'] > 0.0 or slf._argflag['generate']['skyfrac'] > 0.0:
-						slf._fluefull[sp][ll:lu] = slf._modfinal[sp][ll:lu]/objtsnr
-						slf._fluxfull[sp][ll:lu] += np.random.normal(0.0, np.sqrt(slf._fluefull[sp][ll:lu]**2 + modmax*slf._argflag['generate']['skyfrac']))
+						slf._fluefull[sp][ll:lu] = np.sqrt((slf._modfinal[sp][ll:lu]/objtsnr)**2 + (modmax*slf._argflag['generate']['skyfrac'])**2)
+						slf._fluxfull[sp][ll:lu] += np.random.normal(0.0, slf._fluefull[sp][ll:lu])
 				else:
-					slf._fluxfull[sp][ll:lu] += np.random.normal(0.0, slf._fluefull[sp][ll:lu])
+					if np.size(np.where(slf._fluefull[sp][ll:lu] <= 0.0)[0]) != 0:
+						if slf._argflag['generate']['peaksnr'] > 0.0 or slf._argflag['generate']['skyfrac'] > 0.0:
+							msgs.warn("Couldn't add noise to generated data -"+msgs.newline()+"the error array contains zero or negative values", verbose=slf._argflag['out']['verbose'])
+					else:
+						slf._fluxfull[sp][ll:lu] += np.random.normal(0.0, slf._fluefull[sp][ll:lu])
 			# Now that we have the output name, send the data away to be written to file
-			if slf._argflag['out']['onefits']:
-				# Store the fits files in an array and write them out at the end of the for loop
-				ext = '.fits'
-				wvarr.append(slf._wavefull[sp][ll:lu])
-				fxarr.append(slf._fluxfull[sp][ll:lu])
-				erarr.append(slf._fluefull[sp][ll:lu])
-				mdarr.append(modelout)
-			elif fspl[-1] in ["fits", "fit"]:
-				# Write out this snip to a fits file
-				ext = '.fits'
-				save_fitsfits(fnoext, slf._wavefull[sp][ll:lu], slf._fluxfull[sp][ll:lu], slf._fluefull[sp][ll:lu], modelout)
-			else:
-				# Write out the data to an ascii (.dat) file.
-				ext = '.dat'
-				save_asciifits(fnoext, slf._wavefull[sp][ll:lu], slf._fluxfull[sp][ll:lu], slf._fluefull[sp][ll:lu], modelout)
-			fit_fnames = np.append(fit_fnames, fnoext)
-			fnames = np.append(fnames, fnoext+ext)
-	if slf._argflag['out']['onefits']: # The user has requested that all model fits be written into a single fits file:
-		outspl = slf._argflag['run']['modname'].split('.')
-		outname = slf._argflag['run']['modname'].rstrip('.'+outspl[-1])+'_fit'
-		save_onefits(outname, wvarr, fxarr, erarr, mdarr)
-	else: # For snips that were used twice, rename the first instance to have suffix "01"
-		for i in range(len(usdtwice)):
-			os.rename(usdtwice[i]+"."+usdtwext[i],usdtwice[i]+"01."+usdtwext[i])
-	msgs.info("Saved absorption line fits", verbose=slf._argflag['out']['verbose'])
-	return fnames
+			if slf._argflag['out']['fits']:
+				if slf._argflag['out']['onefits']:
+					# Store the fits files in an array and write them out at the end of the for loop
+					ext = '.fits'
+					wvarr.append(slf._wavefull[sp][ll:lu])
+					fxarr.append(slf._fluxfull[sp][ll:lu])
+					erarr.append(slf._fluefull[sp][ll:lu])
+					mdarr.append(modelout)
+				elif fspl[-1] in ["fits", "fit"]:
+					# Write out this snip to a fits file
+					ext = '.fits'
+					save_fitsfits(fnoext, slf._wavefull[sp][ll:lu], slf._fluxfull[sp][ll:lu], slf._fluefull[sp][ll:lu], modelout)
+				else:
+					# Write out the data to an ascii (.dat) file.
+					ext = '.dat'
+					save_asciifits(fnoext, slf, [sp,sn,ll,lu], modelout)
+				fit_fnames = np.append(fit_fnames, fnoext)
+				fnames = np.append(fnames, fnoext+ext)
+	if slf._argflag['out']['fits']:
+		if slf._argflag['out']['onefits']: # The user has requested that all model fits be written into a single fits file:
+			outspl = slf._argflag['run']['modname'].split('.')
+			outname = slf._argflag['run']['modname'].rstrip('.'+outspl[-1])+'_fit'
+			save_onefits(outname, wvarr, fxarr, erarr, mdarr)
+		else: # For snips that were used twice, rename the first instance to have suffix "01"
+			for i in range(len(usdtwice)):
+				os.rename(usdtwice[i]+"."+usdtwext[i],usdtwice[i]+"01."+usdtwext[i])
+		msgs.info("Saved absorption line fits", verbose=slf._argflag['out']['verbose'])
+	# If data has been generated, return the data within slf
+	if slf._argflag['generate']['data']:
+		return slf, fnames
+	else:
+		return fnames
 
-def print_model(params, mp, errs=None, reletter=False, blind=False, verbose=2):
+def print_model(params, mp, errs=None, reletter=False, blind=False, getlines=False, verbose=2):
 	function=alfunc_base.call(getfuncs=True, verbose=verbose)
 	funcinst=alfunc_base.call(getinst=True, verbose=verbose)
 	funccall=alfunc_base.call(verbose=verbose)
 	level=0
 	outstring = ""
 	errstring = "#\n# Errors:\n#\n"
+	cvstring  = ""
+	cvestring = "# Errors:\n#\n"
 	donecv=[]
 	donezl=[]
 	lastemab=""
@@ -134,8 +181,13 @@ def print_model(params, mp, errs=None, reletter=False, blind=False, verbose=2):
 			elif mp['emab'][i]=="ab": aetag = "absorption"
 			elif mp['emab'][i]=="cv": aetag = "convolution"
 			elif mp['emab'][i]=="zl": aetag = "zerolevel"
-			outstring += " "+aetag+"\n"
-			errstring += "#"+aetag+"\n"
+			# Place the model details into a string
+			if mp['emab'][i] == "cv":
+				cvstring  += " "+aetag+"\n"
+				cvestring += "#"+aetag+"\n"
+			else:
+				outstring += " "+aetag+"\n"
+				errstring += "#"+aetag+"\n"
 			lastemab = mp['emab'][i]
 		if errs is None:
 			funcinst[mtyp]._keywd = mp['mkey'][i]
@@ -143,28 +195,43 @@ def print_model(params, mp, errs=None, reletter=False, blind=False, verbose=2):
 			if outstr in donecv or outstr in donezl: continue
 			if mp['emab'][i] == "cv": donecv.append(outstr) # Make sure we don't print convolution more than once.
 			if mp['emab'][i] == "zl": donezl.append(outstr) # Make sure we don't print zerolevel more than once.
-			outstring += outstr
+			# Place the model details into a string
+			if mp['emab'][i] == "cv":
+				cvstring  += outstr
+			else:
+				outstring += outstr
 		else:
 			funcinst[mtyp]._keywd = mp['mkey'][i]
 			outstr, errstr, level = funccall[mtyp].parout(funcinst[mtyp], params, mp, i, level, errs=errs)
 			if outstr in donecv or outstr in donezl: continue
 			if mp['emab'][i] == "cv": donecv.append(outstr) # Make sure we don't print convolution more than once.
 			if mp['emab'][i] == "zl": donezl.append(outstr) # Make sure we don't print zerolevel more than once.
-			outstring += outstr
-			errstring += errstr
+			# Place the model details into a string
+			if mp['emab'][i] == "cv":
+				cvstring  += outstr
+				cvestring += errstr
+			else:
+				outstring += outstr
+				errstring += errstr
 	if blind: return outstring
+	if getlines:
+		if errs is None:
+			return outstring.split("\n"), cvstring.split("\n")
+		else:
+			return outstring.split("\n"), errstring.split("\n"), cvstring.split("\n"), cvestring.split("\n")
 	if errs is None:
-		return outstring
+		return outstring, cvstring
 	else:
-		return outstring, errstring
+		return outstring, errstring, cvstring, cvestring
 
-def save_model(slf,params,errors,info,printout=True,extratxt=["",""]):
+def save_model(slf,params,errors,info,printout=True,extratxt=["",""],filename=None):
 	"""
 	Save the input model into an output script
 	that can be run as input.
 	"""
 	msgs.info("Saving the best-fitting model parameters", verbose=slf._argflag['out']['verbose'])
-	filename = extratxt[0]+slf._argflag['run']['modname']+'.out'+extratxt[1]
+	if filename is None:
+		filename = extratxt[0]+slf._argflag['run']['modname']+'.out'+extratxt[1]
 	prestring = "#\n#  Generated by ALIS on {0:s}\n#\n".format(datetime.datetime.now().strftime("%d/%m/%y at %H:%M:%S"))
 	prestring += "#   Running Time (hrs)  = {0:f}\n".format(info[0])
 	prestring += "#   Initial Chi-Squared = {0:f}\n".format(slf._chisq_init)
@@ -179,7 +246,6 @@ def save_model(slf,params,errors,info,printout=True,extratxt=["",""]):
 		inputmodl += "#   "+slf._parlines[i]
 	prestring +="\ndata read\n"
 	inputmodl += "#   data read\n"
-	msgs.bug("INCLUDE THE BEST-FIT FWHM HERE --- PLACE THE ERROR BELOW", verbose=slf._argflag['out']['verbose'])
 	for i in range(len(slf._datlines)):
 		prestring += slf._datlines[i]
 		inputmodl += "#   "+slf._datlines[i]
@@ -191,16 +257,21 @@ def save_model(slf,params,errors,info,printout=True,extratxt=["",""]):
 	modcomind=[]
 	toutstring=''
 	for i in range(len(slf._modlines)):
+		if len(slf._modlines[i].strip()) == 0: # Nothing on a line
+			inputmodl += "#  "+slf._modlines[i]
+			continue
 		if slf._modlines[i].split()[0] in ["fix", "lim"]: toutstring += slf._modlines[i].replace('\t',' ')
 		if slf._modlines[i].lstrip()[0] == '#':
 			modcomlin.append(slf._modlines[i].rstrip('\n'))
 			modcomind.append(i)
 		inputmodl += "#   "+slf._modlines[i]
-	outstring, errstring = print_model(params,slf._modpass,errs=errors,verbose=slf._argflag['out']['verbose'])
+	outstring, errstring, cvstring, cvestring = print_model(params,slf._modpass,errs=errors,verbose=slf._argflag['out']['verbose'])
 	if printout and slf._argflag['out']['verbose'] != -1:
 		print "\n####################################################"
 		print outstring
 		print errstring
+		print "#"+"\n#".join(cvstring.replace("convolution","Convolution Models:").split("\n"))
+		print cvestring.replace("#convolution\n","")+"\n"
 		print "####################################################\n"
 	# Reinsert the comments at the original locations
 	outstrspl = (toutstring+outstring).split('\n')
@@ -224,6 +295,8 @@ def save_model(slf,params,errors,info,printout=True,extratxt=["",""]):
 		infile.write(prestring)
 		infile.write(outstring)
 		infile.write("\n"+errstring+"\n")
+		infile.write("#"+"\n#".join(cvstring.replace("convolution","Convolution Models:").split("\n")))
+		infile.write("\n"+cvestring.replace("#convolution\n","")+"\n")
 		infile.write("\n###################################################")
 		infile.write("\n#                                                 #")
 		infile.write("\n#          HERE IS A COPY OF THE INPUT MODEL      #")
@@ -240,7 +313,7 @@ def save_covar(slf, covar):
 	msgs.info("Writing out the covariance matrix for the best-fitting model parameters", verbose=slf._argflag['out']['verbose'])
 	if covar is None:
 		msgs.warn("Covariance matrix is 'None', did you interupt the fit?", verbose=slf._argflag['out']['verbose'])
-		msgs.info("Not writing our covariance matrix", verbose=slf._argflag['out']['verbose'])
+		msgs.info("Not writing out covariance matrix", verbose=slf._argflag['out']['verbose'])
 		return
 	if slf._argflag['out']['overwrite']: ans='y'
 	else: ans=''

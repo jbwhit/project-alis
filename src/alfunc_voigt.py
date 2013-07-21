@@ -16,7 +16,7 @@ class Voigt(alfunc_base.Base) :
 	p[2] = turbulent Doppler parameter
 	p[3] = temperature
 	"""
-	def __init__(self, prgname="", getinst=False, loadatomic=False, atmname="atomic_rjc.xml", verbose=2):# atomic_rjc.xml is default
+	def __init__(self, prgname="", getinst=False, loadatomic=False, atmname="atomic.xml", verbose=2):# atomic_rjc.xml is default
 		self._idstr   = 'voigt'																				# ID string for this class
 		self._pnumr   = 6																					# Total number of parameters fed in
 		self._keywd   = dict({'specid':[], 'blind':False, 'ion':'', 'logN':True})							# Additional arguments to describe the model --- 'input' cannot be used as a keyword
@@ -426,7 +426,10 @@ class Voigt(alfunc_base.Base) :
 					else:                pin = parb['ap_1a'][0] * par           # Den is N
 		elif i == 1: pin = par
 		elif i == 2: pin = par
-		elif i == 3: pin = np.sqrt(parb['ap_2a']**2 + 0.01662892444*par/parb['ap_2b'])
+		elif i == 3:
+			pin = np.sqrt(parb['ap_2a']**2 + 0.01662892444*par/parb['ap_2b'])
+			if pin == 0.0:
+				msgs.error("Voigt Total Doppler parameter is zero. It is recommended that you place more"+msgs.newline()+"realistic limits on either the parameters 'temperature' or 'bturb'")
 		elif i == 4: pin = (par + 1.0)**2 - 1.0
 		elif i == 5: pin = par
 		else:
@@ -471,7 +474,7 @@ class Voigt(alfunc_base.Base) :
 			for ln in range(0,self._elw[nv][nw].size):
 				if np.isnan(self._elq[nv][nw][ln]) or self._elq[nv][nw][ln] is np.ma.masked:
 					restwave = self._elw[nv][nw][ln]
-					if pt[4] != 0.0: msgs.error(self._keywd['ion']+str(restwave)+" has no q-value.")
+					if pt[4] != 0.0: msgs.error(self._keywd['ion']+" "+str(restwave)+" has no q-value.")
 				else:
 					restwave = 1.0 / (1.0/self._elw[nv][nw][ln] + self._elq[nv][nw][ln]*pt[4]*1.0E-8)
 				params[ln,:] = np.array([pt[0],pt[1],pt[3],restwave,self._elf[nv][nw][ln],self._elt[nv][nw][ln]])
@@ -536,7 +539,8 @@ class Voigt(alfunc_base.Base) :
 				elif getinfl: return [], []
 				else: return []
 		if nexbin is not None:
-			if params[:,2].min() == 0.0: msgs.error("Cannot calculate "+self._idstr+" subpixellation -- width = 0.0")
+			if params[:,2].min() == 0.0:
+				msgs.error("Cannot calculate "+self._idstr+" subpixellation -- width = 0.0")
 			if nexbin[0] == "km/s": return params, int(round(np.sqrt(2.0)*nexbin[1]/params[:,2].min() + 0.5))
 			elif nexbin[0] == "A" : return params, int(round(np.sqrt(2.0)*299792.458*nexbin[1]/((1.0+params[:,1])*params[:,3]*params[:,2]).min() + 0.5))
 			else:
@@ -545,7 +549,7 @@ class Voigt(alfunc_base.Base) :
 		elif getinfl: return params, parinf
 		else: return params
 
-	def parout(self, params, mp, istart, level, errs=None, reletter=False):
+	def parout(self, params, mp, istart, level, errs=None, reletter=False, conv=None):
 		"""
 		Convert the parameter list to the input form for
 		printing to screen or output to a file.
@@ -586,11 +590,21 @@ class Voigt(alfunc_base.Base) :
 				if reletter:
 					newfmt=pretxt+self.gtoef(params[mp['tpar'][mp['mtie'][istart][i]][1]],self._svfmt[parid[i]]+'{1:c}')
 					outstring.append( (newfmt).format(params[mp['tpar'][mp['mtie'][istart][i]][1]],97+mp['mtie'][istart][i]-32*mp['mfix'][istart][1]) )
-					errstring.append( (newfmt).format(errors[mp['tpar'][mp['mtie'][istart][i]][1]],97+mp['mtie'][istart][i]-32*mp['mfix'][istart][1]) )
+					if conv is None:
+						errstring.append( (newfmt).format(errors[mp['tpar'][mp['mtie'][istart][i]][1]],97+mp['mtie'][istart][i]-32*mp['mfix'][istart][1]) )
+					else:
+						if params[mp['tpar'][mp['mtie'][istart][i]][1]] < conv: cvtxt = "CONVERGED"
+						else: cvtxt = "!!!!!!!!!"
+						errstring.append( ('--{0:s}--{1:c}    ').format(cvtxt,97+mp['mtie'][istart][i]-32*mp['mfix'][istart][1]) )
 				else:
 					newfmt=pretxt+self.gtoef(params[mp['tpar'][mp['mtie'][istart][i]][1]],self._svfmt[parid[i]]+'{1:s}')
 					outstring.append( (newfmt).format(params[mp['tpar'][mp['mtie'][istart][i]][1]],mp['tpar'][mp['mtie'][istart][i]][0]) )
-					errstring.append( (newfmt).format(errors[mp['tpar'][mp['mtie'][istart][i]][1]],mp['tpar'][mp['mtie'][istart][i]][0]) )
+					if conv is None:
+						errstring.append( (newfmt).format(errors[mp['tpar'][mp['mtie'][istart][i]][1]],mp['tpar'][mp['mtie'][istart][i]][0]) )
+					else:
+						if params[mp['tpar'][mp['mtie'][istart][i]][1]] < conv: cvtxt = "CONVERGED"
+						else: cvtxt = "!!!!!!!!!"
+						errstring.append( ('--{0:s}--{1:s}    ').format(cvtxt,mp['tpar'][mp['mtie'][istart][i]][0]) )
 				add -= 1
 			else:
 				if havtie != 2:
@@ -604,21 +618,41 @@ class Voigt(alfunc_base.Base) :
 						if reletter:
 							newfmt=pretxt+self.gtoef(params[level+levadd],self._svfmt[parid[i]]+'{1:c}')
 							outstring.append( (newfmt).format(params[level+levadd],97+tienum-32*mp['mfix'][istart][1]) )
-							errstring.append( (newfmt).format(errors[level+levadd],97+tienum-32*mp['mfix'][istart][1]) )
+							if conv is None:
+								errstring.append( (newfmt).format(errors[level+levadd],97+tienum-32*mp['mfix'][istart][1]) )
+							else:
+								if params[level+levadd] < conv: cvtxt = "CONVERGED"
+								else: cvtxt = "!!!!!!!!!"
+								errstring.append( ('--{0:s}--{1:c}    ').format(cvtxt,97+tienum-32*mp['mfix'][istart][1]) )
 						else:
 							newfmt=pretxt+self.gtoef(params[level+levadd],self._svfmt[parid[i]]+'{1:s}')
 							outstring.append( (newfmt).format(params[level+levadd],mp['tpar'][tienum][0]) )
-							errstring.append( (newfmt).format(errors[level+levadd],mp['tpar'][tienum][0]) )
+							if conv is None:
+								errstring.append( (newfmt).format(errors[level+levadd],mp['tpar'][tienum][0]) )
+							else:
+								if params[level+levadd] < conv: cvtxt = "CONVERGED"
+								else: cvtxt = "!!!!!!!!!"
+								errstring.append( ('--{0:s}--{1:s}    ').format(cvtxt,mp['tpar'][tienum][0]) )
 						tienum += 1
 						if tienum == len(mp['tpar']): havtie = 2 # Stop searching for 1st instance of tied param
 					else:
 						newfmt=pretxt+self.gtoef(params[level+levadd],self._svfmt[parid[i]])
 						outstring.append( (newfmt).format(params[level+levadd]) )
-						errstring.append( (newfmt).format(errors[level+levadd]) )
+						if conv is None:
+							errstring.append( (newfmt).format(errors[level+levadd]) )
+						else:
+							if params[level+levadd] < conv: cvtxt = "CONVERGED"
+							else: cvtxt = "!!!!!!!!!"
+							errstring.append( ('--{0:s}--    ').format(cvtxt) )
 				else:
 					newfmt=pretxt+self.gtoef(params[level+levadd],self._svfmt[parid[i]])
 					outstring.append( (newfmt).format(params[level+levadd]) )
-					errstring.append( (newfmt).format(errors[level+levadd]) )
+					if conv is None:
+						errstring.append( (newfmt).format(errors[level+levadd]) )
+					else:
+						if params[level+levadd] < conv: cvtxt = "CONVERGED"
+						else: cvtxt = "!!!!!!!!!"
+						errstring.append( ('--{0:s}--    ').format(cvtxt) )
 				levadd += 1
 		level += add
 		# Now write in the keywords
@@ -653,17 +687,17 @@ class Voigt(alfunc_base.Base) :
 				del outstring[delind+1]
 				del errstring[delind+1]
 				insind += 1
-		if mp['mkey'][istart]['blind']:
+		if mp['mkey'][istart]['blind'] and conv is None:
 			retout = "       ------ BLIND MODEL ------\n"
 			reterr = "       ------ BLIND MODEL ------\n"				
 		else:
 			retout = '  '.join(outstring) + '\n'
 			reterr = '  '.join(errstring) + '\n'
 		# Return the strings and the new level
-		if errs == None:
-			return retout, level
-		else:
+		if errs is not None or conv is not None:
 			return retout, reterr, level
+		else:
+			return retout, level
 
 	def set_pinfo(self, pinfo, level, mp, mnum):
 		"""

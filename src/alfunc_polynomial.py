@@ -384,7 +384,7 @@ class Polynomial(alfunc_base.Base) :
 			pin = par
 		return pin
 
-	def parout(self, params, mp, istart, level, errs=None, reletter=False):
+	def parout(self, params, mp, istart, level, errs=None, reletter=False, conv=None):
 		"""
 		Convert the parameter list to the input form for
 		printing to screen or output to a file.
@@ -420,11 +420,21 @@ class Polynomial(alfunc_base.Base) :
 				if reletter:
 					newfmt=pretxt+self.gtoef(params[mp['tpar'][mp['mtie'][istart][i]][1]],self._svfmt[0]+'{1:c}')
 					outstring.append( (newfmt).format(params[mp['tpar'][mp['mtie'][istart][i]][1]],97+mp['mtie'][istart][i]-32*mp['mfix'][istart][1]) )
-					errstring.append( (newfmt).format(errors[mp['tpar'][mp['mtie'][istart][i]][1]],97+mp['mtie'][istart][i]-32*mp['mfix'][istart][1]) )
+					if conv is None:
+						errstring.append( (newfmt).format(errors[mp['tpar'][mp['mtie'][istart][i]][1]],97+mp['mtie'][istart][i]-32*mp['mfix'][istart][1]) )
+					else:
+						if params[mp['tpar'][mp['mtie'][istart][i]][1]] < conv: cvtxt = "CONVERGED"
+						else: cvtxt = "!!!!!!!!!"
+						errstring.append( ('--{0:s}--{1:c}    ').format(cvtxt,97+tienum-32*mp['mfix'][istart][1]) )
 				else:
 					newfmt=pretxt+self.gtoef(params[mp['tpar'][mp['mtie'][istart][i]][1]],self._svfmt[0]+'{1:s}')
 					outstring.append( (newfmt).format(params[mp['tpar'][mp['mtie'][istart][i]][1]],mp['tpar'][mp['mtie'][istart][i]][0]) )
-					errstring.append( (newfmt).format(errors[mp['tpar'][mp['mtie'][istart][i]][1]],mp['tpar'][mp['mtie'][istart][i]][0]) )
+					if conv is None:
+						errstring.append( (newfmt).format(errors[mp['tpar'][mp['mtie'][istart][i]][1]],mp['tpar'][mp['mtie'][istart][i]][0]) )
+					else:
+						if params[mp['tpar'][mp['mtie'][istart][i]][1]] < conv: cvtxt = "CONVERGED"
+						else: cvtxt = "!!!!!!!!!"
+						errstring.append( ('--{0:s}--{1:s}    ').format(cvtxt,97+tienum-32*mp['mfix'][istart][1]) )
 				add -= 1
 			else:
 				if havtie != 2:
@@ -439,25 +449,50 @@ class Polynomial(alfunc_base.Base) :
 							if reletter:
 								newfmt=pretxt+self.gtoef(params[level+levadd],self._svfmt[0]+'{1:c}')
 								outstring.append( (newfmt).format(params[level+levadd],97+tienum-32*mp['mfix'][istart][1]) )
-								errstring.append( (newfmt).format(errors[level+levadd],97+tienum-32*mp['mfix'][istart][1]) )
+								if conv is None:
+									errstring.append( (newfmt).format(errors[level+levadd],97+tienum-32*mp['mfix'][istart][1]) )
+								else:
+									if params[level+levadd] < conv: cvtxt = "CONVERGED"
+									else: cvtxt = "!!!!!!!!!"
+									errstring.append( ('--{0:s}--{1:c}    ').format(cvtxt,97+tienum-32*mp['mfix'][istart][1]) )
 							else:
 								newfmt=pretxt+self.gtoef(params[level+levadd],self._svfmt[0]+'{1:s}')
 								outstring.append( (newfmt).format(params[level+levadd],mp['tpar'][tienum][0]) )
-								errstring.append( (newfmt).format(errors[level+levadd],mp['tpar'][tienum][0]) )
+								if conv is None:
+									errstring.append( (newfmt).format(errors[level+levadd],mp['tpar'][tienum][0]) )
+								else:
+									if params[level+levadd] < conv: cvtxt = "CONVERGED"
+									else: cvtxt = "!!!!!!!!!"
+									errstring.append( ('--{0:s}--{1:s}    ').format(cvtxt,mp['tpar'][tienum][0]) )
 							tienum += 1
 							if tienum == len(mp['tpar']): havtie = 2 # Stop searching for 1st instance of tied param
 						else:
 							newfmt=pretxt+self.gtoef(params[level+levadd],self._svfmt[0])
 							outstring.append( (newfmt).format(params[level+levadd]) )
-							errstring.append( (newfmt).format(errors[level+levadd]) )
+							if conv is None:
+								errstring.append( (newfmt).format(errors[level+levadd]) )
+							else:
+								if params[level+levadd] < conv: cvtxt = "CONVERGED"
+								else: cvtxt = "!!!!!!!!!"
+								errstring.append( ('--{0:s}--    ').format(cvtxt) )
 					else: # There are no tied parameters!
 						newfmt=pretxt+self.gtoef(params[level+levadd],self._svfmt[0])
 						outstring.append( (newfmt).format(params[level+levadd]) )
-						errstring.append( (newfmt).format(errors[level+levadd]) )
+						if conv is None:
+							errstring.append( (newfmt).format(errors[level+levadd]) )
+						else:
+							if params[level+levadd] < conv: cvtxt = "CONVERGED"
+							else: cvtxt = "!!!!!!!!!"
+							errstring.append( ('--{0:s}--    ').format(cvtxt) )
 				else:
 					newfmt=pretxt+self.gtoef(params[level+levadd],self._svfmt[0])
 					outstring.append( (newfmt).format(params[level+levadd]) )
-					errstring.append( (newfmt).format(errors[level+levadd]) )
+					if conv is None:
+						errstring.append( (newfmt).format(errors[level+levadd]) )
+					else:
+						if params[level+levadd] < conv: cvtxt = "CONVERGED"
+						else: cvtxt = "!!!!!!!!!"
+						errstring.append( ('--{0:s}--    ').format(cvtxt) )
 				levadd += 1
 		level += add
 		# Now write in the keywords
@@ -492,17 +527,17 @@ class Polynomial(alfunc_base.Base) :
 				del outstring[delind+1]
 				del errstring[delind+1]
 				insind += 1
-		if mp['mkey'][istart]['blind']:
+		if mp['mkey'][istart]['blind'] and conv is None:
 			retout = "       ------ BLIND MODEL ------\n"
 			reterr = "       ------ BLIND MODEL ------\n"				
 		else:
 			retout = '  '.join(outstring) + '\n'
 			reterr = '  '.join(errstring) + '\n'
 		# Return the strings and the new level
-		if errs == None:
-			return retout, level
-		else:
+		if errs is not None or conv is not None:
 			return retout, reterr, level
+		else:
+			return retout, level
 
 	def set_pinfo(self, pinfo, level, mp, mnum):
 		"""

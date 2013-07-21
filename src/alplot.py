@@ -6,7 +6,7 @@ msgs=almsgs.msgs()
 
 def make_plots_all(slf, model=None):
 	msgs.info("Preparing data to be plotted", verbose=slf._argflag['out']['verbose'])
-	wavearr, fluxarr, fluearr, modlarr = slf._wavefull, slf._fluxfull, slf._fluefull, slf._modfinal
+	wavearr, fluxarr, fluearr, modlarr, contarr, zeroarr = slf._wavefull, slf._fluxfull, slf._fluefull, slf._modfinal, slf._contfinal, slf._zerofinal
 	if model is not None: modlarr = model
 	posnarr, dims = slf._posnfull, slf._argflag['plot']['dims']
 	dspl = dims.split('x')
@@ -41,8 +41,8 @@ def make_plots_all(slf, model=None):
 	snips_done=0
 	numone = 0
 	pgcnt_arr = []
-	ps_wvarr, ps_fxarr, ps_fearr, ps_mdarr, ps_disps = [], [], [], [], []
-	po_wvarr, po_fxarr, po_fearr, po_mdarr, po_disps = [], [], [], [], []
+	ps_wvarr, ps_fxarr, ps_fearr, ps_mdarr, ps_ctarr, ps_zrarr, ps_disps = [], [], [], [], [], [], []
+	po_wvarr, po_fxarr, po_fearr, po_mdarr, po_ctarr, po_zrarr, po_disps = [], [], [], [], [], [], []
 	# Construct the arrays for the subplots
 	if pages == 0: # Only doing single plots
 		sp = snpid[snips_done]
@@ -53,6 +53,8 @@ def make_plots_all(slf, model=None):
 			po_fxarr.append([])
 			po_fearr.append([])
 			po_mdarr.append([])
+			po_ctarr.append([])
+			po_zrarr.append([])
 			llo=posnarr[sp][sn]
 			luo=posnarr[sp][sn+1]
 			po_disps[numone].append(0.5*np.append( (wavearr[sp][llo+1]-wavearr[sp][llo]), (wavearr[sp][llo+1:luo]-wavearr[sp][llo:luo-1]) ))
@@ -60,6 +62,8 @@ def make_plots_all(slf, model=None):
 			po_fxarr[numone].append(fluxarr[sp][llo:luo])
 			po_fearr[numone].append(fluearr[sp][llo:luo])
 			po_mdarr[numone].append(modlarr[sp][llo:luo])
+			po_ctarr[numone].append(contarr[sp][llo:luo])
+			po_zrarr[numone].append(zeroarr[sp][llo:luo])
 			snips_done += 1
 			numone += 1
 			pltlst[sp] += 1
@@ -80,6 +84,8 @@ def make_plots_all(slf, model=None):
 			ps_fxarr.append([])
 			ps_fearr.append([])
 			ps_mdarr.append([])
+			ps_ctarr.append([])
+			ps_zrarr.append([])
 #			ps_cparr.append([])
 			# Determine the number of panels for this page
 			if panels_left <= panppg: pgcnt = numsub-subpnl_done
@@ -93,6 +99,8 @@ def make_plots_all(slf, model=None):
 					po_fxarr.append([])
 					po_fearr.append([])
 					po_mdarr.append([])
+					po_ctarr.append([])
+					po_zrarr.append([])
 					llo=posnarr[sp][sn]
 					luo=posnarr[sp][sn+1]
 					po_disps[numone].append(0.5*np.append( (wavearr[sp][llo+1]-wavearr[sp][llo]), (wavearr[sp][llo+1:luo]-wavearr[sp][llo:luo-1]) ))
@@ -100,6 +108,8 @@ def make_plots_all(slf, model=None):
 					po_fxarr[numone].append(fluxarr[sp][llo:luo])
 					po_fearr[numone].append(fluearr[sp][llo:luo])
 					po_mdarr[numone].append(modlarr[sp][llo:luo])
+					po_ctarr[numone].append(contarr[sp][llo:luo])
+					po_zrarr[numone].append(zeroarr[sp][llo:luo])
 					snips_done += 1
 					numone += 1
 					pltlst[sp] += 1
@@ -125,6 +135,8 @@ def make_plots_all(slf, model=None):
 				ps_fxarr[pg].append(fluxarr[sp][ll:lu])
 				ps_fearr[pg].append(fluearr[sp][ll:lu])
 				ps_mdarr[pg].append(modlarr[sp][ll:lu])
+				ps_ctarr[pg].append(contarr[sp][ll:lu])
+				ps_zrarr[pg].append(zeroarr[sp][ll:lu])
 #				ps_cparr[pg].append(comparr[sp][panels_done+i])
 				pltlst[sp] += 1
 			snips_done += pgcnt
@@ -132,15 +144,15 @@ def make_plots_all(slf, model=None):
 			panels_left -= panppg
 			pgcnt_arr.append(pgcnt)
 #	ps_nw = [ps_names, ps_waves]
-	ps_wfem = [ps_wvarr, ps_fxarr, ps_fearr, ps_mdarr]
-	po_wfem = [po_wvarr, po_fxarr, po_fearr, po_mdarr]
+	ps_wfemc = [ps_wvarr, ps_fxarr, ps_fearr, ps_mdarr, ps_ctarr, ps_zrarr]
+	po_wfemc = [po_wvarr, po_fxarr, po_fearr, po_mdarr, po_ctarr, po_zrarr]
 	msgs.info("Prepared {0:d} panels in subplots".format(subpnl_done), verbose=slf._argflag['out']['verbose'])
 	msgs.info("Prepared {0:d} panels in single plots".format(numone), verbose=slf._argflag['out']['verbose'])
-	numpagesA = plot_drawplots(pages, ps_wfem, pgcnt_arr, ps_disps, dspl, slf._argflag, verbose=slf._argflag['out']['verbose'])
-	numpagesB = plot_drawplots(numone, po_wfem, np.ones(numone).astype(np.int), po_disps, [1,1], slf._argflag, numpages=pages, verbose=slf._argflag['out']['verbose'])
+	numpagesA = plot_drawplots(pages, ps_wfemc, pgcnt_arr, ps_disps, dspl, slf._argflag, verbose=slf._argflag['out']['verbose'])
+	numpagesB = plot_drawplots(numone, po_wfemc, np.ones(numone).astype(np.int), po_disps, [1,1], slf._argflag, numpages=pages, verbose=slf._argflag['out']['verbose'])
 	msgs.info("Plotted {0:d} pages".format(numpagesA+numpagesB), verbose=slf._argflag['out']['verbose'])
 
-def plot_drawplots(pages, wfemarr, pgcnt, disp, dims, argflag, numpages=0, verbose=2):
+def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, numpages=0, verbose=2):
 	"""
 	Plot the fitting results in mxn panels.
 	"""
@@ -159,33 +171,42 @@ def plot_drawplots(pages, wfemarr, pgcnt, disp, dims, argflag, numpages=0, verbo
 		fig.append(plt.figure(figsize=(12.5,10), dpi=80))
 		fig[pgnum].subplots_adjust(hspace=0.1, wspace=0.1, bottom=0.07, top=0.98, left=0.04, right=0.98)
 		for i in range(pgcnt[pg]):
-			w = np.where(wfemarr[3][pg][i] > -0.5)
+			w = np.where(wfemcarr[3][pg][i] > -0.5)
 			if np.size(w[0]) == 0:
 				msgs.warn("There was no model data found for a panel", verbose=argflag['out']['verbose'])
 			ax = fig[pgnum].add_subplot(dims[0],dims[1],i+1)
-			ax.plot([wfemarr[0][pg][i].min(),wfemarr[0][pg][i].max()],[0.0,0.0], 'g--')
-			ax.plot([wfemarr[0][pg][i].min(),wfemarr[0][pg][i].max()],[1.0,1.0],'b--')
-			ax.plot(wfemarr[0][pg][i]+disp[pg][i],wfemarr[1][pg][i], 'k-', drawstyle='steps')
-			ax.plot(wfemarr[0][pg][i]+disp[pg][i],wfemarr[2][pg][i], 'b-', drawstyle='steps')
-			if np.size(w[0]) != 0: ax.plot(wfemarr[0][pg][i][w],wfemarr[3][pg][i][w], 'r-')
+			# Plot the error spectrum
+			ax.fill_between(wfemcarr[0][pg][i],wfemcarr[5][pg][i]-wfemcarr[2][pg][i],wfemcarr[5][pg][i]+wfemcarr[2][pg][i],facecolor='0.7')
+##			ax.plot(wfemcarr[0][pg][i]+disp[pg][i],wfemcarr[2][pg][i], 'b-', drawstyle='steps')
+			# Plot the data
+			ax.plot(wfemcarr[0][pg][i]+disp[pg][i],wfemcarr[1][pg][i], 'k-', drawstyle='steps')
+			if np.size(w[0]) != 0:
+				# Plot the model
+				ax.plot(wfemcarr[0][pg][i][w],wfemcarr[3][pg][i][w], 'r-')
+				# Plot the continuum
+				ax.plot(wfemcarr[0][pg][i][w],wfemcarr[4][pg][i][w], 'b--')
+				# Plot the residuals
+				ax.plot(wfemcarr[0][pg][i][w]+disp[pg][i][w],wfemcarr[5][pg][i][w]+wfemcarr[1][pg][i][w]-wfemcarr[3][pg][i][w], 'b-', drawstyle='steps', alpha=0.5)
+				# Plot the zero level
+				ax.plot(wfemcarr[0][pg][i],wfemcarr[5][pg][i], 'g--')
 #			if argx == 2: # For velocity:
-#				wmin=np.min([mmpltx[0],1.2*np.min(wfemarr[0][pg][i][w])])
-#				wmax=np.max([mmpltx[1],1.2*np.max(wfemarr[0][pg][i][w])])
+#				wmin=np.min([mmpltx[0],1.2*np.min(wfemcarr[0][pg][i][w])])
+#				wmax=np.max([mmpltx[1],1.2*np.max(wfemcarr[0][pg][i][w])])
 #			elif argx == 1: # For rest wave:
 #				xfacm = elnw[1][pg][i]*(1.0+mmpltx/299792.458)
-#				wmin=np.min([xfacm[0],1.2*np.min(wfemarr[0][pg][i][w])-0.2*elnw[1][pg][i]])
-#				wmax=np.max([xfacm[1],1.2*np.min(wfemarr[0][pg][i][w])-0.2*elnw[1][pg][i]])
+#				wmin=np.min([xfacm[0],1.2*np.min(wfemcarr[0][pg][i][w])-0.2*elnw[1][pg][i]])
+#				wmax=np.max([xfacm[1],1.2*np.min(wfemcarr[0][pg][i][w])-0.2*elnw[1][pg][i]])
 #			else: # For observed wave:
 #				xfacm = (1.0+rdshft)*elnw[1][pg][i]*(1.0 + mmpltx/299792.458)
-#			wmin=np.min([xfacm[0],1.2*np.min(wfemarr[0][pg][i][w])-0.2*(1.0+rdshft)*elnw[1][pg][i]])
-#			wmax=np.max([xfacm[1],1.2*np.max(wfemarr[0][pg][i][w])-0.2*(1.0+rdshft)*elnw[1][pg][i]])
+#			wmin=np.min([xfacm[0],1.2*np.min(wfemcarr[0][pg][i][w])-0.2*(1.0+rdshft)*elnw[1][pg][i]])
+#			wmax=np.max([xfacm[1],1.2*np.max(wfemcarr[0][pg][i][w])-0.2*(1.0+rdshft)*elnw[1][pg][i]])
 			if np.size(w[0]) != 0:
-				wmin=1.3*np.min(wfemarr[0][pg][i][w])-0.3*np.mean(wfemarr[0][pg][i][w])
-				wmax=1.3*np.max(wfemarr[0][pg][i][w])-0.3*np.mean(wfemarr[0][pg][i][w])
+				wmin=1.3*np.min(wfemcarr[0][pg][i][w])-0.3*np.mean(wfemcarr[0][pg][i][w])
+				wmax=1.3*np.max(wfemcarr[0][pg][i][w])-0.3*np.mean(wfemcarr[0][pg][i][w])
 			else:
 				msgs.warn("No model to plot for page {0:d} panel {1:d}".format(pg+1+numpages,i+1)+msgs.newline()+"Check the fitrange for this parameter?", verbose=verbose)
-				wmin=np.min(wfemarr[0][pg][i])
-				wmax=np.max(wfemarr[0][pg][i])
+				wmin=np.min(wfemcarr[0][pg][i])
+				wmax=np.max(wfemcarr[0][pg][i])
 #			for j in range(0,len(comparr[pg][i])/3):
 #				if comparr[pg][i][3*j] == '0': cstr = 'k-'
 #				else: cstr = 'r-'
@@ -204,11 +225,11 @@ def plot_drawplots(pages, wfemarr, pgcnt, disp, dims, argflag, numpages=0, verbo
 #			if argx == 2: ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%5.1f'))
 #			else: ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%6.2f'))
 			ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%6.2f'))
-			flue_med = 2.0*np.median(wfemarr[2][pg][i])
-			modl_max = np.max(wfemarr[3][pg][i])
+			flue_med = 3.0*np.median(wfemcarr[2][pg][i])
+			modl_max = np.max(wfemcarr[4][pg][i])
 #			if argflag['plot']['labels']: ymax = np.max([1.0+2.0*flue_med, 2.0])
 #			else: ymax = np.max([1.0+2.0*flue_med, 1.2])
-			ymax = np.max([modl_max+flue_med, 1.2*np.max(wfemarr[3][pg][i])])
+			ymax = np.max([modl_max+flue_med, 1.2*np.max(wfemcarr[4][pg][i])])
 			ax.set_ylim(-flue_med,ymax)
 			#ax.set_yticks((0,0.5,1.0))
 		pgnum += 1
