@@ -16,6 +16,7 @@ from ihooks import BasicModuleLoader as srcloader
 # Import a Chi-Squared minimisation package
 from alcsmin import alfit
 # Import useful ALIS definitions:
+import alconv
 import alload
 import alplot
 import alsave
@@ -43,13 +44,14 @@ def myfunct_wrap(p, fjac=None, x=None, y=None, err=None, fdict=None, ddpid=None,
 
 class ClassMain:
 
-	def __init__(self, argflag, getinst=False, modelfile=None, parlines=[], datlines=[], modlines=[], data=None, verbose=None):
+	def __init__(self, argflag, getinst=False, modelfile=None, parlines=[], datlines=[], modlines=[], data=None, fitonly=False, verbose=None):
 		if getinst: return # Just get an instance
 
 		# Set parameters
 		self._argflag = argflag
 		if verbose is not None: self._argflag['out']['verbose'] = verbose
 		self._retself = False
+		self._fitonly = fitonly
 
 		# Get the calls to each of the functions
 		self._function=alfunc_base.call(getfuncs=True, verbose=self._argflag['out']['verbose'])
@@ -101,13 +103,15 @@ class ClassMain:
 
 	def model_func(self, x, p, pos, ddpid=None, output=0):
 		if self._argflag['run']['renew_subpix']:
-			wavespx, posnspx, nexbins = alload.load_subpixels(self, p) # recalculate the sub-pixellation of the spectrum
+			wavespx, contspx, zerospx, posnspx, nexbins = alload.load_subpixels(self, p) # recalculate the sub-pixellation of the spectrum
 		else:
-			wavespx, posnspx, nexbins = self._wavespx, self._posnspx, self._nexbins
+			wavespx, contspx, zerospx, posnspx, nexbins = self._wavespx, self._contspx, self._zerospx, self._posnspx, self._nexbins
 		if ddpid is None:
 			self._pinfl = alload.load_par_influence(self, p) # Determine which parameters influence each sp and sn
 #		modgpu=[]
-		model, mzero, mcont, modcv, modcvf, self._modfinal = [], [], [], [], [], []
+		model, mzero, mcont, modcv, modcvf = [], copy.deepcopy(zerospx), copy.deepcopy(contspx), [], []
+		self._modfinal, self._contfinal, self._zerofinal = [], [], []
+		#print zerospx
 		# Setup of the data <---> model arrays
 		pararr=[[] for all in pos]
 		keyarr=[[] for all in pos]
@@ -118,11 +122,13 @@ class ClassMain:
 #		print self._specid
 		for sp in range(0,len(pos)):
 			model.append(np.zeros(wavespx[sp].size))
-			mzero.append(np.zeros(wavespx[sp].size))
-			mcont.append(np.zeros(wavespx[sp].size))
+#			mzero.append(zerospx[sp])
+#			mcont.append(contspx[sp])
 			modcv.append(np.zeros(x[sp].size))
 			modcvf.append(np.zeros(self._wavefit[sp].size))
-			self._modfinal.append(-1.0*np.ones(x[sp].size))
+			self._modfinal.append(-9.999999999E9*np.ones(x[sp].size))
+			self._contfinal.append(-9.999999999E9*np.ones(x[sp].size))
+			self._zerofinal.append(-9.999999999E9*np.ones(x[sp].size))
 			lastemab, iea = ['' for all in pos[sp][:-1]], [-1 for all in pos[sp][:-1]]
 			for sn in range(len(pos[sp])-1):
 				ll = pos[sp][sn]
@@ -177,15 +183,18 @@ class ClassMain:
 						if np.size(pararr[sp][sn][iea[sn]][mid]) == 0:
 							pararr[sp][sn][iea[sn]][mid] = np.array([params])
 						else:
+							if np.shape(pararr[sp][sn][iea[sn]][mid])[1] != np.shape(np.array([params]))[1]:
+								msgs.error("Error when getting parameters for model function '{0:s}'".format(mtyp)+msgs.newline()+"This model probably has a variable number of parameters and has"+msgs.newline()+"been specified twice for one specid. Make sure you give the same"+msgs.newline()+"number of parameters to this function for a given specid.")
 							pararr[sp][sn][iea[sn]][mid] = np.append(pararr[sp][sn][iea[sn]][mid],np.array([params]),axis=0)
 						keyarr[sp][sn][iea[sn]][mid].append(self._modpass['mkey'][i])
 					else:
 						if np.size(pararr[sp][sn][iea[sn]][mid]) == 0:
 							pararr[sp][sn][iea[sn]][mid] = params
 						else:
+							if np.shape(pararr[sp][sn][iea[sn]][mid])[1] != np.shape(params)[1]:
+								msgs.error("Error when getting parameters for model function '{0:s}'".format(mtyp)+msgs.newline()+"This model probably has a variable number of parameters and has"+msgs.newline()+"been specified twice for one specid. Make sure you give the same"+msgs.newline()+"number of parameters to this function for a given specid.")
 							pararr[sp][sn][iea[sn]][mid] = np.append(pararr[sp][sn][iea[sn]][mid],params,axis=0)
 						for all in range(np.shape(params)[0]): keyarr[sp][sn][iea[sn]][mid].append(self._modpass['mkey'][i])
-
 ################
 #
 #		pool = mpPool(processes=self.ncpus)
@@ -239,7 +248,7 @@ class ClassMain:
 					mtyp = zerlev[sp][0]
 					zpar = zerlev[sp][1]
 					zkey = zerlev[sp][2]
-					mzero[sp][ll:lu] = self._funccall[mtyp].call_CPU(self._funcinst[mtyp], wave, zpar, ae='zl', mkey=zkey)
+					mzero[sp][ll:lu] += self._funccall[mtyp].call_CPU(self._funcinst[mtyp], wave, zpar, ae='zl', mkey=zkey)
 				for ea in range(len(pararr[sp][sn])):
 					if ea%2 == 0: aetag = 'em'
 					else: aetag = 'ab'
@@ -263,7 +272,8 @@ class ClassMain:
 							model[sp][ll:lu] += mout
 						else: # absorption
 							model[sp][ll:lu] *= mout
-					if ea == 0: mcont[sp][ll:lu] = model[sp][ll:lu].copy()
+					if ea == 0:
+						mcont[sp][ll:lu] += model[sp][ll:lu].copy()
 		# Convolve the data with the appropriate instrumental profile
 		stf, enf = [0 for all in pos], [0 for all in pos]
 		cvind = np.where(np.array(self._modpass['emab'])=='cv')[0][0]
@@ -293,10 +303,11 @@ class ClassMain:
 				mdtmp = self._funccall[mtyp].call_CPU(self._funcinst[mtyp], wavespx[sp][llx:lux], model[sp][llx:lux], params)
 				# Apply the zero-level correction if necessary
 				if len(zerlev[sp]) != 0:
-					mdtmp = mdtmp +  mzero[sp][llx:lux]*(1.0-mdtmp)/mcont[sp][llx:lux] # This is a general case.
+					mdtmp = mcont[sp][llx:lux]*(mdtmp +  mzero[sp][llx:lux])/(mcont[sp][llx:lux]+mzero[sp][llx:lux]) # This is a general case.
+#					mdtmp = mdtmp +  mzero[sp][llx:lux]*(1.0-mdtmp)/mcont[sp][llx:lux]
 				modcv[sp][ll:lu] = mdtmp.reshape(x[sp][ll:lu].size,nexbins[sp][sn]).sum(axis=1)/np.float64(nexbins[sp][sn])
 				# Finally, apply the user-specified continuum (if it's not 1.0)
-				modcv[sp][ll:lu] *= self._contfull[sp][ll:lu]
+#				modcv[sp][ll:lu] *= self._contfull[sp][ll:lu]
 				# Extract the fitted part of the model.
 				w = np.where((x[sp][ll:lu] >= self._posnfit[sp][2*sn+0]) & (x[sp][ll:lu] <= self._posnfit[sp][2*sn+1]))
 				wA= np.in1d(x[sp][ll:lu][w], self._wavefit[sp])
@@ -304,6 +315,8 @@ class ClassMain:
 				enf[sp] = stf[sp] + x[sp][ll:lu][w][wB].size
 				modcvf[sp][stf[sp]:enf[sp]] = modcv[sp][ll:lu][w][wB]
 				self._modfinal[sp][ll:lu][w] = modcv[sp][ll:lu][w]
+				self._contfinal[sp][ll:lu][w] = (mcont[sp][llx:lux].reshape(x[sp][ll:lu].size,nexbins[sp][sn]).sum(axis=1)/np.float64(nexbins[sp][sn]))[w]
+				self._zerofinal[sp][ll:lu] = (mzero[sp][llx:lux].reshape(x[sp][ll:lu].size,nexbins[sp][sn]).sum(axis=1)/np.float64(nexbins[sp][sn]))
 				stf[sp] = enf[sp]
 				cvind += 1
 		del wavespx, posnspx, nexbins
@@ -347,7 +360,7 @@ class ClassMain:
 		# Load the parameter information array
 		parinfo, self._levadd = alload.load_parinfo(self)
 		# Sub-pixellate the spectrum
-		self._wavespx, self._posnspx, self._nexbins = alload.load_subpixels(self, self._modpass['p0'])
+		self._wavespx, self._contspx, self._zerospx, self._posnspx, self._nexbins = alload.load_subpixels(self, self._modpass['p0'])
 		# NOW PREPARE TO FIT THE DATA!
 		fdict = self.__dict__#.copy()
 		fa = {'x':wavf, 'y':fluf, 'err':errf, 'fdict':fdict}
@@ -366,9 +379,6 @@ class ClassMain:
 			alplot.make_plots_all(self)
 			fileend=raw_input(msgs.input()+"Press enter to view the fits -")
 			alplot.plot_showall()
-		elif self._argflag['generate']['data']:
-			# Generate some data
-			fnames = alsave.save_modelfits(self)
 		elif self._argflag['sim']['random'] is not None and self._argflag['sim']['beginfrom'] != "":
 			import alsims
 			# If doing systematics you can skip the initial fit
@@ -406,7 +416,7 @@ class ClassMain:
 				m = alfit(myfunct_wrap, self._modpass['p0'], parinfo=parinfo, functkw=fa,
 						verbose=self._argflag['out']['verbose'], modpass=self._modpass, miniter=self._argflag['chisq']['miniter'], maxiter=self._argflag['chisq']['maxiter'],
 						ftol=self._argflag['chisq']['ftol'], gtol=self._argflag['chisq']['gtol'], xtol=self._argflag['chisq']['xtol'],
-						ncpus=self._argflag['run']['ncpus'], fstep=self._argflag['chisq']['fstep'])
+						ncpus=self._argflag['run']['ncpus'], fstep=self._argflag['chisq']['fstep'],limpar=self._argflag['run']['limpar'])
 				model = self.myfunct(m.params, output=2)
 				# Pass the fitted information to the user module and obtain and updated model and completion status
 				newmodln = alsave.modlines(self, m.params, self._modpass, verbose=self._argflag['out']['verbose'])
@@ -423,24 +433,44 @@ class ClassMain:
 					fa['fdict'] = self.__dict__
 					iternum += 1
 			self._tend=time.time()
+		elif self._argflag['generate']['data']:
+			# Save the generated data
+			#if self._argflag['out']['fits'] or self._argflag['out']['onefits']:
+			# Go to modelfits to generate the fake data. It won't be written out unless self._argflag['out']['fits'] is True
+			self, fnames = alsave.save_modelfits(self)
+			# Plot the results
+			if self._argflag['plot']['fits']:
+				alplot.make_plots_all(self)
+				null=raw_input(msgs.input()+"Press enter to view the fits -")
+				alplot.plot_showall()
 		else:
 			msgs.info("Commencing chi-squared minimisation",verbose=self._argflag['out']['verbose'])
 			m = alfit(myfunct_wrap, self._modpass['p0'], parinfo=parinfo, functkw=fa,
 						verbose=self._argflag['out']['verbose'], modpass=self._modpass, miniter=self._argflag['chisq']['miniter'], maxiter=self._argflag['chisq']['maxiter'],
 						ftol=self._argflag['chisq']['ftol'], gtol=self._argflag['chisq']['gtol'], xtol=self._argflag['chisq']['xtol'],
-						ncpus=self._argflag['run']['ncpus'], fstep=self._argflag['chisq']['fstep'])
+						ncpus=self._argflag['run']['ncpus'], fstep=self._argflag['chisq']['fstep'],limpar=self._argflag['run']['limpar'])
 			self._tend=time.time()
 			niter=m.niter
 			if (m.status <= 0):
-				if m.status == -20:
+				if m.status == -20: # Interrupted fit
 					msgs.info("Fitting routine was interrupted",verbose=self._argflag['out']['verbose'])
 					msgs.warn("Setting ERRORS = PARAMETERS",verbose=self._argflag['out']['verbose'])
 					m.perror = m.params
-				else: msgs.error(m.errmsg)
+				elif m.status == -21: # Parameters are not within the specified limits
+					if type(self._modpass['line'][m.errmsg[0][0]]) is int: msgs.error("A parameter that = {0:s} is not within the specified limits on line -".format(m.errmsg[1])+msgs.newline()+self._modlines[self._modpass['line'][m.errmsg[0][0]]])
+					else: msgs.error("A parameter that = {0:s} is not within specified limits on line -".format(m.errmsg[1])+msgs.newline()+self._modpass['line'][m.errmsg[0][0]])
+				else:
+					if m.errmsg == "": msgs.error("There was an error in the chi-squared minimization - "+msgs.newline()+"please contact the author")
+					msgs.error(m.errmsg)
 			else:
 				msgs.info("Reason for convergence:"+msgs.newline()+alutils.getreason(m.status,verbose=self._argflag['out']['verbose']),verbose=self._argflag['out']['verbose'])
 			# Create the best-fitting model, this generates some arrays that are now required
 			msgs.info("Best-fitting model parameters found",verbose=self._argflag['out']['verbose'])
+			# If the user just wants to fit the data and return, do so.
+			if self._fitonly:
+				self._fitresults = m
+				return self
+			# Otherwise, do everything else
 			if self._argflag['run']['convergence']:
 				if m.status == -20:
 					msgs.warn("Cannot check convergence for an interrupted fit",verbose=self._argflag['out']['verbose'])
@@ -458,7 +488,7 @@ class ClassMain:
 						mc = alfit(myfunct_wrap, mpars.params, parinfo=parinfo, functkw=fa,
 								verbose=self._argflag['out']['verbose'], modpass=self._modpass, miniter=self._argflag['chisq']['miniter'], maxiter=self._argflag['chisq']['maxiter'],
 								ftol=self._argflag['chisq']['ftol'], gtol=self._argflag['chisq']['gtol'], xtol=self._argflag['chisq']['xtol'],
-								ncpus=self._argflag['run']['ncpus'], fstep=self._argflag['chisq']['fstep'], convtest=True)
+								ncpus=self._argflag['run']['ncpus'], fstep=self._argflag['chisq']['fstep'],limpar=self._argflag['run']['limpar'], convtest=True)
 						# Update parameters
 						mpars = copy.deepcopy(mc)
 						# Keep going until this run has reached the tolerances
@@ -476,25 +506,38 @@ class ClassMain:
 						# Check the solution
 						# Find out which parameters have converged
 						whrconv = np.where( (np.abs(mpars.params-mt.params)/mt.perror) >= self._argflag['run']['convcriteria'])[0]
+						outputconvfile = True
 						if np.size(whrconv) == 0 and mpars.niter > 1 and mpars.status != 5:
 							msgs.info("Solution has converged",verbose=self._argflag['out']['verbose'])
+							if outputconvfile:
+								fwrite = open(self._argflag['run']['modname'].rstrip("mod")+"convY", "w")
+								fwrite.close()
 							# Use the best-fit results from the convergence test
 							m = mpars
 							msgs.info("Reason for convergence:"+msgs.newline()+alutils.getreason(mpars.status,verbose=self._argflag['out']['verbose']),verbose=self._argflag['out']['verbose'])
 							break
 						elif mc.niter == 1:
+							if outputconvfile:
+								fwrite = open(self._argflag['run']['modname'].rstrip("mod")+"convN", "w")
+								fwrite.close()
 							msgs.warn("Solution has probably not converged yet (after 1 iteration)",verbose=self._argflag['out']['verbose'])
 							if self._argflag['run']['convnostop']:
 								msgs.info("User has forced to continue convergence with 'noconvstop'",verbose=self._argflag['out']['verbose'])
 								continue
 							else: break
 						elif mc.status == 5:
+							if outputconvfile:
+								fwrite = open(self._argflag['run']['modname'].rstrip("mod")+"convN", "w")
+								fwrite.close()
 							msgs.warn("Solution has probably not converged yet."+msgs.newline()+"Maximum number of iterations reached",verbose=self._argflag['out']['verbose'])
 							if self._argflag['run']['convnostop']:
 								msgs.info("User has forced to continue convergence with 'noconvstop'",verbose=self._argflag['out']['verbose'])
 								continue
 							else: break
 						else:
+							if outputconvfile:
+								fwrite = open(self._argflag['run']['modname'].rstrip("mod")+"convN", "w")
+								fwrite.close()
 							msgs.warn("Solution has not converged for {0:d}/{1:d} free parameters".format(np.size(whrconv), numfreepars),verbose=self._argflag['out']['verbose'])
 							msgs.info("Maximum parameter difference was {0:f} sigma".format( np.max((np.abs(mpars.params-mt.params)/mt.perror)[whrconv]) ),verbose=self._argflag['out']['verbose'])
 							if not self._argflag['run']['convnostop']: break # Stop if convergence isn't forced
@@ -506,6 +549,14 @@ class ClassMain:
 			# Prepare some arrays for eventual plotting
 #			if self._posnLya != 0:
 #				elnames, elwaves, rdshft, comparr = alplot.prep_arrs(self._snip_ions, self._snip_detl, self._posnfit)
+			# Write out the results of the convergence test:
+			if self._argflag['run']['convergence']:
+				if m.status != -20 and mc.status != -20 and mpars.status != -20:
+					if self._argflag['out']['convtest'] != "":
+						fit_info=[(self._tend - self._tstart)/3600.0, m.fnorm, m.dof, m.niter, m.status]
+						diff = np.abs(mpars.params-mt.params)/mt.perror
+						diff[np.where((mpars.params==mt.params) & (mt.perror==0.0))[0]] = 0.0
+						alconv.save_convtest(self, diff, self._argflag['run']['convcriteria'],fit_info)
 			# Write out the data and model fits
 			if self._argflag['out']['fits'] or self._argflag['out']['onefits']:
 				fnames = alsave.save_modelfits(self)
@@ -516,8 +567,13 @@ class ClassMain:
 				alsave.save_smfiles(self._modname_dla, fnames, elnames, elwaves, comparr, rdshft)
 			# Write an output of the parameters for the best-fitting model
 			if self._argflag['run']['blind'] and m.status != -20:
-				msgs.info("Printing out the parameter errors:",verbose=self._argflag['out']['verbose'])
-				print alsave.print_model(m.perror, self._modpass, blind=True, verbose=self._argflag['out']['verbose'])
+				if self._argflag['run']['convergence']:
+					if mc.status != -20 and mpars.status != -20:
+						msgs.info("Printing out the parameter errors:",verbose=self._argflag['out']['verbose'])
+						print alsave.print_model(m.perror, self._modpass, blind=True, verbose=self._argflag['out']['verbose'])
+				else:
+					msgs.info("Printing out the parameter errors:",verbose=self._argflag['out']['verbose'])
+					print alsave.print_model(m.perror, self._modpass, blind=True, verbose=self._argflag['out']['verbose'])
 			if self._argflag['out']['model']:
 				fit_info=[(self._tend - self._tstart)/3600.0, m.fnorm, m.dof, m.niter, m.status]
 				alsave.save_model(self, m.params, m.perror, fit_info)
@@ -542,7 +598,7 @@ class ClassMain:
 
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
-def alis(modelfile=None, parlines=[], datlines=[], modlines=[], data=None, verbose=-1):
+def alis(modelfile=None, parlines=[], datlines=[], modlines=[], data=None, fitonly=False, verbose=-1):
 	"""
 	modelfile : This is the name of a model file
 	lines : This is a three element list of the form [parlines, datlines, modlines]
@@ -553,11 +609,11 @@ def alis(modelfile=None, parlines=[], datlines=[], modlines=[], data=None, verbo
 	debug = True
 	if debug:
 		argflag = alload.optarg(os.path.realpath(__file__), verbose=verbose)
-		return ClassMain(argflag, parlines=parlines, datlines=datlines, modlines=modlines, modelfile=modelfile, data=data, verbose=verbose)
+		return ClassMain(argflag, parlines=parlines, datlines=datlines, modlines=modlines, modelfile=modelfile, data=data, fitonly=fitonly, verbose=verbose)
 	else:
 		try:
 			argflag = alload.optarg(os.path.realpath(__file__), verbose=verbose)
-			return ClassMain(argflag, parlines=parlines, datlines=datlines, modlines=modlines, modelfile=modelfile, data=data, verbose=verbose)
+			return ClassMain(argflag, parlines=parlines, datlines=datlines, modlines=modlines, modelfile=modelfile, data=data, fitonly=fitonly, verbose=verbose)
 		except Exception:
 			# There is a bug in the code, print the file and line number of the error.
 			et, ev, tb = sys.exc_info()
@@ -569,29 +625,40 @@ def alis(modelfile=None, parlines=[], datlines=[], modlines=[], data=None, verbo
 			filename=filename.split('/')[-1]
 			almsgs.msgs.bug("There appears to be a bug on Line "+line_no+" of "+filename+" with error:"+msgs.newline()+str(ev)+msgs.newline()+"---> please contact the author")
 
+def initialise(alispath, verbose=-1):
+	argflag = alload.optarg(alispath, verbose=verbose)
+	slf = ClassMain(argflag,getinst=True)
+	slf._argflag = argflag
+	slf._function=alfunc_base.call(getfuncs=True, verbose=slf._argflag['out']['verbose'])
+	slf._funccall=alfunc_base.call(verbose=slf._argflag['out']['verbose'])
+	slf._funcinst=alfunc_base.call(prgname=slf._argflag['run']['prognm'], getinst=True, verbose=slf._argflag['out']['verbose'])
+	return slf
+
 if __name__ == "__main__":
 	debug = True
 	if debug:
 		msgs.bug("Read in resolution from column of data")
+		msgs.bug("Read in an optional label for each of the data, which can be used in plotting")
+		msgs.bug("With voigt function, if the user says to put an O I profile in specid A, make sure there is actually an O I line in specid A.")
 		msgs.bug("Prepare a separate .py file for user-created functions")
 		msgs.bug("Load atomic data that can be used by all functions")
+		msgs.bug("Update the datlines for the output files to include the best-fitting resolution model")
 		msgs.bug("Assign a number to every warning and error -- describe this in the manual")
-		msgs.bug("Output best fits (either .dat or .fits) file should have every line of input")
 		msgs.bug("Still haven't written a onefits for saving fits files... or multiple fits files even!")
 		msgs.bug("If emission is not specified for a specid before absorption (in a model with several specid's), the specid printed as an error is always one before")
 		argflag = alload.optarg(os.path.realpath(__file__), argv=sys.argv[1:])
 		# Assign filelist:
-		if sys.argv[-1].split('.')[-1] != 'mod': alload.usage(argflag)
-		else:
-			argflag['run']['modname'] = sys.argv[-1]
+#		if sys.argv[-1].split('.')[-1] != 'mod': alload.usage(argflag)
+#		else:
+		argflag['run']['modname'] = sys.argv[-1]
 		ClassMain(argflag)
 	else:
 		try:
 			argflag = alload.optarg(os.path.realpath(__file__), argv=sys.argv[1:])
 			# Assign filelist:
-			if sys.argv[-1].split('.')[-1] != 'mod': alload.usage(argflag)
-			else:
-				argflag['run']['modname'] = sys.argv[-1]
+#			if sys.argv[-1].split('.')[-1] != 'mod': alload.usage(argflag)
+#			else:
+			argflag['run']['modname'] = sys.argv[-1]
 			ClassMain(argflag)
 		except Exception:
 			# There is a bug in the code, print the file and line number of the error.

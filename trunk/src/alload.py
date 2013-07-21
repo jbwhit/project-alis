@@ -173,10 +173,10 @@ def load_settings(fname,verbose=2):
 		"""
 		Initialise the default settings called argflag
 		"""
-		rna = dict({'prognm':'alis.py', 'last_update':'Last updated 6th April 2013', 'atomic':'atomic.xml', 'modname':'model.mod', 'convergence':False, 'convnostop':False, 'convcriteria':0.2, 'ncpus':-1, 'ngpus':None, 'nsubpix':5, 'warn_subpix':100, 'renew_subpix':False, 'blind':True, 'bintype':'km/s', 'logn':True})
+		rna = dict({'prognm':'alis.py', 'last_update':'Last updated 6th April 2013', 'atomic':'atomic.xml', 'modname':'model.mod', 'convergence':False, 'convnostop':False, 'convcriteria':0.2, 'limpar':False, 'ncpus':-1, 'ngpus':None, 'nsubpix':5, 'nsubmin':5, 'nsubmax':21, 'warn_subpix':100, 'renew_subpix':False, 'blind':True, 'bintype':'km/s', 'logn':True})
 		csa = dict({'miniter':0, 'maxiter':20000, 'xtol':1.0E-10, 'ftol':1.0E-10, 'gtol':1.0E-10, 'fstep':1.0})
 		pla = dict({'dims':'3x3', 'fits':True, 'xaxis':'observed', 'labels':False, 'only':False, 'pages':'all'})
-		opa = dict({'model':True, 'fits':False, 'onefits':False, 'overwrite':False, 'sm':False, 'verbose':2, 'reletter':False, 'covar':""})
+		opa = dict({'model':True, 'fits':False, 'onefits':False, 'overwrite':False, 'sm':False, 'verbose':2, 'reletter':False, 'covar':"", 'convtest':""})
 		mca = dict({'random':None, 'systematics':False, 'beginfrom':"", 'startid':0, 'systmodule':None, 'newstart':True, 'dirname':'sims', 'edgecut':4.0})
 		gna = dict({'pixelsize':2.5, 'data':False, 'peaksnr':0.0, 'skyfrac':0.0})
 		itr = dict({'model':None, 'data':None})
@@ -194,6 +194,7 @@ def load_settings(fname,verbose=2):
 def check_argflag(argflag, curcpu=None):
 	# Make some final corrections to the input parameters
 	argflag['out']['covar'] = argflag['out']['covar'].strip("\"'")
+	argflag['out']['convtest'] = argflag['out']['convtest'].strip("\"'")
 	argflag['sim']['beginfrom'] = argflag['sim']['beginfrom'].strip("\"'")
 	# Check requested CPUs
 	argflag['run']['ncpus'] = cpucheck(argflag['run']['ncpus'], curcpu=curcpu, verbose=argflag['out']['verbose'])
@@ -257,9 +258,30 @@ def load_input(slf, filename=None, updateself=True):
 	datlines = []
 	modlines = []
 	rddata, rdmodl = 0, 0
+	ignlin = -1
 	for i in range(len(lines)):
-		if lines[i].strip() == '': continue
-		linspl = lines[i].split()
+		goodtxt = lines[i].strip().split('#')[0]
+		# Check if we are currently ignoring sections of the input script
+		if ignlin != -1:
+			if '<--#' in lines[i]:
+				goodtxt = lines[i].strip().split('<--#')[1]
+				if '#-->' in goodtxt:
+					msgs.error("You can only use one long comment (either '#-->' or '<--#') per line")
+				msgs.warn("Ignoring lines {0:d} --> {1:d} of input file".format(ignlin,i+1),verbose=slf._argflag['out']['verbose'])
+				ignlin = -1
+			else: continue
+			if len(goodtxt) == 0: continue
+		elif '<--#' in lines[i]:
+			msgs.error("I encountered the end of a long comment ('<--#') on line {0:d} of".format(i+1)+msgs.newline()+"the input file, before the start of a long comment ('#-->')")
+		# Check if we need to start ignoring chunks of input
+		if '#-->' in lines[i]:
+			ignlin = i+1
+			templin = lines[i].split('#-->')
+			if '<--#' in templin[1]:
+				msgs.error("You can only use one long comment (either '#-->' or '<--#') per line")
+		# Check if there's nothing on a line
+		if goodtxt == '': continue
+		linspl = goodtxt.split()
 		if rddata == 1:
 			if linspl[0] == 'data' and linspl[1] == 'end':
 				rddata += 1
@@ -317,7 +339,7 @@ def load_data(slf, datlines, data=None):
 	slf._snipid=[]
 	datopt = dict({'plotone':[],'nsubpix':[],'bintype':[],'columns':[],'systematics':[],'systmodule':[]})
 	keywords = ['specid','fitrange','systematics','systmodule','resolution','columns','plotone','nsubpix','bintype','loadall']
-	colallow = np.array(['wave','flux','error','continuum','fitrange','systematics','resolution'])
+	colallow = np.array(['wave','flux','error','continuum','zerolevel','fitrange','systematics','resolution'])
 	columns  = np.array(['wave','flux','error'])
 	systload = [None, 'continuumpoly']
 	# Get all SpecIDs and check if input is correct
@@ -402,8 +424,8 @@ def load_data(slf, datlines, data=None):
 			slf._snipid.append('None')
 	# Prepare the data arrays
 	snipnames, resn, posnfull, posnfit, plotone = [], [], [], [], []
-	wavefull, fluxfull, fluefull, contfull, systfull = [], [], [], [], []
-	wavefit, fluxfit, fluefit, contfit = [], [], [], []
+	wavefull, fluxfull, fluefull, contfull, zerofull, systfull = [], [], [], [], [], []
+	wavefit, fluxfit, fluefit, contfit, zerofit = [], [], [], [], []
 	for i in range(specid.size):
 		datopt['plotone'].append([])
 		datopt['columns'].append([])
@@ -417,6 +439,7 @@ def load_data(slf, datlines, data=None):
 		fluxfull.append( np.array([]) )
 		fluefull.append( np.array([]) )
 		contfull.append( np.array([]) )
+		zerofull.append( np.array([]) )
 		systfull.append( np.array([]) )
 		resn.append( np.array([]) )
 		posnfit.append([])
@@ -424,13 +447,14 @@ def load_data(slf, datlines, data=None):
 		fluxfit.append( np.array([]) )
 		fluefit.append( np.array([]) )
 		contfit.append( np.array([]) )
+		zerofit.append( np.array([]) )
 	# Load data for each specid.
 	if len(specid) == 1: sind = 0
 	for i in range(0,len(datlines)):
 		if len(datlines[i].strip()) == 0 : continue # Nothing on a line
 		nocoms = datlines[i].lstrip().split('#')[0] # Remove everything on a line after the first instance of a comment symbol: #
 		if len(nocoms) == 0: continue # A comment line
-		wfe = dict({'wave':0, 'flux':1, 'error':2, 'continuum':-1, 'systematics':-1, 'fitrange':-1, 'resolution':-1})
+		wfe = dict({'wave':0, 'flux':1, 'error':2, 'continuum':-1, 'zerolevel':-1, 'systematics':-1, 'fitrange':-1, 'resolution':-1})
 		fitrange = 'all'
 		linspl = nocoms.split()
 		if data is None:
@@ -490,7 +514,7 @@ def load_data(slf, datlines, data=None):
 			# Check first if we are supposed to generate our own data
 			if slf._argflag['generate']['data']:
 				if os.path.exists(filename):
-					wavein, fluxin, fluein, contin, systin, fitrin = load_datafile(filename, colspl, wfe)
+					wavein, fluxin, fluein, contin, zeroin, systin, fitrin = load_datafile(filename, colspl, wfe, verbose=slf._argflag['out']['verbose'])
 				else:
 					msgs.warn("The following file does not exist:"+msgs.newline()+filename,verbose=slf._argflag['out']['verbose'])
 					msgs.info("Generating a wavelength array for this file",verbose=slf._argflag['out']['verbose'])
@@ -504,22 +528,22 @@ def load_data(slf, datlines, data=None):
 						npix = 1.0+np.ceil(np.log10(wavemax/wavemin)/np.log10(1.0+slf._argflag['generate']['pixelsize']/299792.458))
 						wavein = wavemin*(1.0+slf._argflag['generate']['pixelsize']/299792.458)**np.arange(npix)
 						fluxin = np.zeros(wavein.size)
-						fluein = np.ones(wavein.size)
-						contin, systin, fitrin = np.ones(wavein.size), np.zeros(wavein.size), np.ones(wavein.size)
+						fluein = np.zeros(wavein.size)
+						contin, zeroin, systin, fitrin = np.zeros(wavein.size), np.zeros(wavein.size), np.zeros(wavein.size), np.ones(wavein.size)
 					elif bntyp == 'A':
 						npix = 1.0 + np.ceil((wavemax-wavemin)/slf._argflag['generate']['pixelsize'])
 						wavein = wavemin + slf._argflag['generate']['pixelsize']*np.arange(npix)
 						fluxin = np.zeros(wavein.size)
-						fluein = np.ones(wavein.size)
-						contin, systin, fitrin = np.ones(wavein.size), np.zeros(wavein.size), np.ones(wavein.size)
+						fluein = np.zeros(wavein.size)
+						contin, zeroin, systin, fitrin = np.zeros(wavein.size), np.zeros(wavein.size), np.zeros(wavein.size), np.ones(wavein.size)
 					else:
 						msgs.error("Sorry, I do not know the bintype: {0:s}".format(bntyp))
 			# Has the user passed in their own data array?
 			elif data is not None:
-				wavein, fluxin, fluein, contin, systin, fitrin = load_userdata(data, colspl, wfe)
+				wavein, fluxin, fluein, contin, zeroin, systin, fitrin = load_userdata(data, colspl, wfe, verbose=slf._argflag['out']['verbose'])
 			# Otherwise, load the data from a file
 			else:
-				wavein, fluxin, fluein, contin, systin, fitrin = load_datafile(filename, colspl, wfe)
+				wavein, fluxin, fluein, contin, zeroin, systin, fitrin = load_datafile(filename, colspl, wfe, verbose=slf._argflag['out']['verbose'])
 		except:
 			msgs.error("Error reading in file -"+msgs.newline()+filename)
 		# Store the filename for later
@@ -561,12 +585,14 @@ def load_data(slf, datlines, data=None):
 		fluxfit[sind] = np.append(fluxfit[sind], fluxin[wf])
 		fluefit[sind] = np.append(fluefit[sind], fluein[wf])
 		contfit[sind] = np.append(contfit[sind], contin[wf])
+		zerofit[sind] = np.append(zerofit[sind], zeroin[wf])
 		# Put the full data in separate array
 		posnfull[sind].append(wavefull[sind].size)
 		wavefull[sind] = np.append(wavefull[sind], wavein[w])
 		fluxfull[sind] = np.append(fluxfull[sind], fluxin[w])
 		fluefull[sind] = np.append(fluefull[sind], fluein[w])
 		contfull[sind] = np.append(contfull[sind], contin[w])
+		zerofull[sind] = np.append(zerofull[sind], zeroin[w])
 		systfull[sind] = np.append(systfull[sind], systin[w])
 	# And finally append the total size of the array.
 	for i in range(specid.size):
@@ -574,12 +600,13 @@ def load_data(slf, datlines, data=None):
 	# Update the slf class with the loaded data
 	slf._snipnames, slf._resn, slf._datlines, slf._specid, slf._datopt = snipnames, resn, datlines, specid, datopt
 	slf._posnfull, slf._posnfit = posnfull, posnfit
-	slf._wavefull, slf._fluxfull, slf._fluefull, slf._contfull, slf._systfull = wavefull, fluxfull, fluefull, contfull, systfull
-	slf._wavefit, slf._contfit, slf._fluxfit, slf._fluefit = wavefit, contfit, fluxfit, fluefit
+	slf._wavefull, slf._fluxfull, slf._fluefull, slf._contfull, slf._zerofull, slf._systfull = wavefull, fluxfull, fluefull, contfull, zerofull, systfull
+	slf._wavefit, slf._fluxfit, slf._fluefit, slf._contfit, slf._zerofit = wavefit, fluxfit, fluefit, contfit, zerofit
 	msgs.info("Data loaded successfully",verbose=slf._argflag['out']['verbose'])
 	return
 
-def load_userdata(data, colspl, wfe):
+
+def load_userdata(data, colspl, wfe, verbose=2):
 	wfek = wfe.keys()
 	usecols=()
 	ucind=dict({})
@@ -594,15 +621,43 @@ def load_userdata(data, colspl, wfe):
 	ncols = datain.shape[1]
 	if len(colspl) > ncols:
 		msgs.error("The data only have {0:d} columns. Have you specified too many".format(ncols)+msgs.newline()+"columns with the 'columns' keyword?")
-	if wfe['continuum'] != -1: contin = datain[ucind['continuum'],:]
-	else: contin = np.ones(wavein.size)
-	if wfe['systematics'] != -1: systin = datain[ucind['systematics'],:]
+	# Read the continuum data
+	if wfe['continuum'] != -1:
+		try:
+			contin = datain[ucind['continuum'],:]
+		except:
+			msgs.warn("A continuum was not provided as input", verbose=verbose)
+			contin = np.zeros(wavein.size)
+	else: contin = np.zeros(wavein.size)
+	# Read the zero-level data
+	if wfe['zerolevel'] != -1:
+		try:
+			zeroin = datain[ucind['zerolevel'],:]
+		except:
+			msgs.warn("A zero-level was not provided as input", verbose=verbose)
+			zeroin = np.zeros(wavein.size)
+	else: zeroin = np.zeros(wavein.size)
+	# Read the systematics information
+	if wfe['systematics'] != -1:
+		try:
+			systin = datain[ucind['systematics'],:]
+		except:
+			msgs.warn("Systematics information was not provided as input", verbose=verbose)
+			systin = np.zeros(wavein.size)
 	else: systin = np.zeros(wavein.size)
-	if wfe['fitrange']  != -1: fitrin = datain[ucind['fitrange'],:]
+	# Read the fitrange information
+	if wfe['fitrange']  != -1:
+		try:
+			fitrin = datain[ucind['fitrange'],:]
+		except:
+			msgs.warn("Fit range information was not provided as input", verbose=verbose)
+			fitrin = np.ones(wavein.size).astype(np.int32)
 	else: fitrin = np.ones(wavein.size).astype(np.int32)
-	return wavein, fluxin, fluein, contin, systin, fitrin
+	# Now return
+	return wavein, fluxin, fluein, contin, zeroin, systin, fitrin
 
-def load_datafile(filename, colspl, wfe):
+
+def load_datafile(filename, colspl, wfe, verbose=2):
 	wfek = wfe.keys()
 	dattyp = filename.split(".")[-1]
 	if dattyp in ['dat', 'ascii']:
@@ -613,29 +668,47 @@ def load_datafile(filename, colspl, wfe):
 		msgs.error("Sorry, I don't know how to read in ."+dattyp+" files.")
 	return
 
-def load_ascii(filename, colspl, wfe, wfek):
-	usecols=()
-	ucind=dict({})
-	uccnt=0
+def load_ascii(filename, colspl, wfe, wfek, verbose=2):
+#	usecols=()
+#	ucind=dict({})
+#	uccnt=0
+#	for j in range(len(wfek)):
+#		if wfe[wfek[j]] == -1: continue
+#		usecols += (wfe[wfek[j]],)
+#		ucind[wfek[j]]=uccnt
+#		uccnt+=1
+#	try:
+#		datain = np.loadtxt(filename, dtype=np.float64, usecols=usecols).transpose()
+#	except:
+	wavein, fluxin, fluein, contin, zeroin, systin, fitrin = None, None, None, None, None, None, None
 	for j in range(len(wfek)):
 		if wfe[wfek[j]] == -1: continue
-		usecols += (wfe[wfek[j]],)
-		ucind[wfek[j]]=uccnt
-		uccnt+=1
-	datain = np.loadtxt(filename, dtype=np.float64, usecols=usecols).transpose()
-	wavein, fluxin, fluein = datain[ucind['wave'],:].astype(np.float64), datain[ucind['flux'],:].astype(np.float64), datain[ucind['error'],:].astype(np.float64)
-	ncols = datain.shape[1]
-	if len(colspl) > ncols:
-		msgs.error("The following file -"+msgs.newline()+filename+msgs.newline()+"only has "+str(ncols)+" columns")
-	if wfe['continuum'] != -1: contin = datain[ucind['continuum'],:]
-	else: contin = np.ones(wavein.size)
-	if wfe['systematics'] != -1: systin = datain[ucind['systematics'],:]
-	else: systin = np.zeros(wavein.size)
-	if wfe['fitrange']  != -1: fitrin = datain[ucind['fitrange'],:]
-	else: fitrin = np.ones(wavein.size).astype(np.int32)
-	return wavein, fluxin, fluein, contin, systin, fitrin
+		try:
+			onecol = np.loadtxt(filename, dtype=np.float64, usecols=(wfe[wfek[j]],))
+			if   wfek[j] == 'wave':        wavein = onecol
+			elif wfek[j] == 'flux':        fluxin = onecol
+			elif wfek[j] == 'error':       fluein = onecol
+			elif wfek[j] == 'continuum':   contin = onecol
+			elif wfek[j] == 'zerolevel':   zeroin = onecol
+			elif wfek[j] == 'systematics': systin = onecol
+			elif wfek[j] == 'fitrange':    fitrin = onecol
+			else:
+				msgs.error("I didn't understand '{0:s}' when reading in -".format(wfek[j])+msgs.newline()+filename)
+		except:
+			msgs.warn("{0:s} information was not provided as input for the file -".format(wfek[j])+msgs.newline()+filename, verbose=verbose)
+			if wfek[j] not in ['systematics']:
+				msgs.info("The {0:s} will be output for the above file".format(wfek[j]), verbose=verbose)
+	if wavein is None or fluxin is None or fluein is None:
+		msgs.error("Wavelength, flux or error array was not provided for -"+msgs.newline()+filename)
+	if contin is None: contin = np.zeros(wavein.size)
+	if zeroin is None: zeroin = np.zeros(wavein.size)
+	if systin is None: systin = np.zeros(wavein.size)
+	if fitrin is None: fitrin = np.ones(wavein.size).astype(np.int32)
+	# Now return
+	return wavein, fluxin, fluein, contin, zeroin, systin, fitrin
 
-def load_fits(filename, colspl, wfe):
+
+def load_fits(filename, colspl, wfe, verbose=2):
 	infile = pyfits.open(filename)
 	datain=infile[0].data
 	# Load the wavelength scale
@@ -651,13 +724,44 @@ def load_fits(filename, colspl, wfe):
 	ncols = datain.shape[1]
 	if len(colspl) > ncols:
 		msgs.error("The following file -"+msgs.newline()+filename+msgs.newline()+"only has "+str(ncols)+" columns")
-	if wfe['continuum'] != -1: contin = datain[wfe['continuum'],:].astype(np.float64)
-	else: contin = np.ones(wavein.size).astype(np.float64)
-	if wfe['systematics'] != -1: systin = datain[wfe['systematics'],:]
+	# Read in the continuum
+	if wfe['continuum'] != -1:
+		try:
+			contin = datain[wfe['continuum'],:].astype(np.float64)
+		except:
+			msgs.warn("A continuum was not provided as input for the file -"+msgs.newline()+filename, verbose=verbose)
+			msgs.info("The continuum will be output for the above file", verbose=verbose)
+			contin = np.zeros(wavein.size).astype(np.float64)
+	else: contin = np.zeros(wavein.size).astype(np.float64)
+	# Read in the zero-level
+	if wfe['zerolevel'] != -1:
+		try:
+			zeroin = datain[wfe['zerolevel'],:]
+		except:
+			msgs.warn("A zero-level was not provided as input for the file -"+msgs.newline()+filename, verbose=verbose)
+			msgs.info("The zero-level will be output for the above file", verbose=verbose)
+			zeroin = np.zeros(wavein.size).astype(np.float64)
+	else: zeroin = np.zeros(wavein.size).astype(np.float64)
+	# Read in the systematics information
+	if wfe['systematics'] != -1:
+		try:
+			systin = datain[wfe['systematics'],:]
+		except:
+			msgs.warn("Systematics information was not provided as input for the file -"+msgs.newline()+filename, verbose=verbose)
+			systin = np.zeros(wavein.size).astype(np.float64)
 	else: systin = np.zeros(wavein.size).astype(np.float64)
-	if wfe['fitrange']  != -1: fitrin = datain[wfe['fitrange'],:].astype(np.float64)
+	# Read in the fit range
+	if wfe['fitrange']  != -1:
+		try:
+			fitrin = datain[wfe['fitrange'],:].astype(np.float64)
+		except:
+			msgs.warn("A fitting range was not provided as input for the file -"+msgs.newline()+filename, verbose=verbose)
+			msgs.info("The fitting range will be output for the above file", verbose=verbose)
+			fitrin = np.ones(wavein.size).astype(np.float64)
 	else: fitrin = np.ones(wavein.size).astype(np.float64)
-	return wavein, fluxin, fluein, contin, systin, fitrin
+	# Now return
+	return wavein, fluxin, fluein, contin, zeroin, systin, fitrin
+
 
 def load_model(slf, modlines, updateself=True):
 	"""
@@ -677,10 +781,12 @@ def load_model(slf, modlines, updateself=True):
 					'mkey':[],  # Keyword parameters
 					'psto':[], 
 					'p0':[],    # Variables/parameters
-					'emab':[]}) # Emission or Absorption?
+					'emab':[],  # Emission or Absorption?
+					'line':[]}) # The index of modlines that corresponds to this parameter
 	cntr=0
 	# Load the models form
 	parid = []
+	pnumlin=[]
 	zl_spcfd = False
 	for i in range(len(modlines)):
 		if len(modlines[i].strip()) == 0: continue # Nothing on a line
@@ -705,6 +811,7 @@ def load_model(slf, modlines, updateself=True):
 		elif mdlspl[0] in slf._function: # Load the model parameters
 			instr = nocoms.strip().lstrip(mdlspl[0]).strip()
 			modpass, paridt = slf._funccall[mdlspl[0]].load(slf._funcinst[mdlspl[0]], instr, cntr, modpass, slf._specid)
+			for j in range(len(pnumlin),len(modpass['p0'])): pnumlin.append(i) # Store which element of modlines each parameter comes from
 			parid.append(paridt)
 			if mdlspl[0] not in funcused: funcused.append(mdlspl[0])
 		else:
@@ -719,6 +826,7 @@ def load_model(slf, modlines, updateself=True):
 			modpass, paridt = slf._funccall[fspl[0]].load(slf._funcinst[fspl[0]], fspl[1], cntr, modpass, slf._specid)
 			modpass['emab'].append('cv')
 			parid.append(paridt)
+			pnumlin.append("resolution="+slf._resn[i][j])
 			cntr += 1
 	# Now go through modlines again and make the appropriate changes to the modpass dictionary
 	cntr = 0
@@ -729,6 +837,7 @@ def load_model(slf, modlines, updateself=True):
 		mdlspl = nocoms.split()
 		if mdlspl[0] == 'emission' or mdlspl[0] == 'absorption' or mdlspl[0] == 'zerolevel': continue
 		if mdlspl[0] == 'fix':
+			if len(mdlspl) != 4: msgs.error("Keyword 'fix' requires three arguments on line -"+msgs.newline()+modlines[i])
 			# Make some changes to the function instance based on input file
 			if mdlspl[1] not in slf._function: msgs.error("Keyword 'fix' does not accept the parameter "+mdlspl[1]+" on line -"+msgs.newline()+modlines[i])
 			if mdlspl[2] not in slf._funcinst[mdlspl[1]]._parid: msgs.error("Keyword "+mdlspl[1]+" does not accept the parameter "+mdlspl[2]+" on line -"+msgs.newline()+modlines[i])
@@ -737,6 +846,7 @@ def load_model(slf, modlines, updateself=True):
 			else: slf._funcinst[mdlspl[1]]._fixpar[find] = mdlspl[3]
 			continue
 		elif mdlspl[0] == 'lim':
+			if len(mdlspl) != 4: msgs.error("Keyword 'lim' requires three arguments on line -"+msgs.newline()+modlines[i])
 			# Make some changes to the function instance based on input file
 			if mdlspl[1] not in slf._function: msgs.error("Keyword 'lim' does not accept the parameter "+mdlspl[1]+" on line -"+msgs.newline()+modlines[i])
 			if mdlspl[2] not in slf._funcinst[mdlspl[1]]._parid: msgs.error("Keyword "+mdlspl[1]+" does not accept the parameter "+mdlspl[2]+" on line -"+msgs.newline()+modlines[i])
@@ -778,6 +888,7 @@ def load_model(slf, modlines, updateself=True):
 	if updateself:
 		slf._emab = emab
 		slf._funcused = funcused
+	modpass['line'] = pnumlin
 	return modpass
 
 def load_subpixels(slf, parin):
@@ -786,7 +897,7 @@ def load_subpixels(slf, parin):
 	# Find narrowest profile in the model
 	for sp in range(len(slf._posnfull)):
 		lastemab, iea = ['' for all in slf._posnfull[sp][:-1]], [-1 for all in slf._posnfull[sp][:-1]]
-		nexbins.append([1 for all in slf._posnfull[sp][:-1]])
+		nexbins.append([slf._argflag['run']['nsubmin'] for all in slf._posnfull[sp][:-1]])
 		for sn in range(len(slf._posnfull[sp])-1):
 			ll = slf._posnfull[sp][sn]
 			lu = slf._posnfull[sp][sn+1]
@@ -809,7 +920,11 @@ def load_subpixels(slf, parin):
 				slf._funcinst[mtyp]._keywd = slf._modpass['mkey'][i]
 				params, nbn = slf._funccall[mtyp].set_vars(slf._funcinst[mtyp], parin, slf._levadd[i], slf._modpass, i, wvrng=wvrng, spid=slf._specid[sp], levid=slf._levadd, nexbin=[slf._datopt['bintype'][sp][sn],slf._datopt['nsubpix'][sp][sn]])
 				if len(params) == 0: continue
-				if nbn > nexbins[sp][sn]: nexbins[sp][sn] = nbn
+				if nbn > nexbins[sp][sn]:
+					if nbn > slf._argflag['run']['nsubmax']:
+						nexbins[sp][sn] = slf._argflag['run']['nsubmax']
+					else:
+						nexbins[sp][sn] = nbn
 	# Find narrowest profile in the instrumental FWHM
 	stf, enf = [0 for all in slf._posnfull], [0 for all in slf._posnfull]
 	cvind = np.where(np.array(slf._modpass['emab'])=='cv')[0][0]
@@ -817,9 +932,13 @@ def load_subpixels(slf, parin):
 		for sn in range(len(slf._posnfull[sp])-1):
 			mtyp = slf._modpass['mtyp'][cvind]
 			params, nbn = slf._funccall[mtyp].set_vars(slf._funcinst[mtyp], parin, slf._levadd[cvind], slf._modpass, cvind, nexbin=[slf._datopt['bintype'][sp][sn],slf._datopt['nsubpix'][sp][sn]])
-			if nbn > nexbins[sp][sn]: nexbins[sp][sn] = nbn
+			if nbn > nexbins[sp][sn]:
+				if nbn > slf._argflag['run']['nsubmax']:
+					nexbins[sp][sn] = slf._argflag['run']['nsubmax']
+				else:
+					nexbins[sp][sn] = nbn
 			cvind += 1
-	wavespx, posnspx = [np.array([]) for all in slf._posnfull], [[] for all in slf._posnfull]
+	wavespx, contspx, zerospx, posnspx = [np.array([]) for all in slf._posnfull], [np.array([]) for all in slf._posnfull], [np.array([]) for all in slf._posnfull], [[] for all in slf._posnfull]
 	for sp in range(len(slf._posnfull)):
 		for sn in range(len(slf._posnfull[sp])-1):
 			if nexbins[sp][sn] > slf._argflag['run']['warn_subpix']: msgs.warn("sub-pixellation scale ({0:d}) has exceeded the warning level of: {1:d}".format(nexbins[sp][sn],slf._argflag['run']['warn_subpix']),verbose=slf._argflag['out']['verbose'])
@@ -836,10 +955,24 @@ def load_subpixels(slf, parin):
 			else: msgs.bug("Bintype "+bintype+" is unknown",verbose=slf._argflag['out']['verbose'])
 			posnspx[sp].append(wavespx[sp].size)
 			wavespx[sp] = np.append(wavespx[sp], wavs)
+			if np.all(1.0-slf._contfull[sp][ll:lu]): # No continuum is provided -- no interpolation is necessary
+				contspx[sp] = np.append(contspx[sp], np.zeros(np.size(wavs)))
+			else: # Do linear interpolation
+				gradA = np.append((slf._contfull[sp][ll+1:lu]-slf._contfull[sp][ll:lu-1])/(slf._wavefull[sp][ll+1:lu]-slf._wavefull[sp][ll:lu-1]),(slf._contfull[sp][lu-1]-slf._contfull[sp][lu-2])/(slf._wavefull[sp][lu-1]-slf._wavefull[sp][lu-2])).reshape(lu-ll,1)
+				gradB = np.append( (slf._contfull[sp][ll+1]-slf._contfull[sp][ll])/(slf._wavefull[sp][ll+1]-slf._wavefull[sp][ll]), (slf._contfull[sp][ll+1:lu]-slf._contfull[sp][ll:lu-1])/(slf._wavefull[sp][ll+1:lu]-slf._wavefull[sp][ll:lu-1]),(slf._contfull[sp][lu-1]-slf._contfull[sp][lu-2])/(slf._wavefull[sp][lu-1]-slf._wavefull[sp][lu-2])).reshape(lu-ll,1)
+				gradv = np.mean(np.array([gradA,gradB]),axis=0)
+				contspx[sp] = np.append(contspx[sp], (slf._contfull[sp][ll:lu].reshape(lu-ll,1) + (wavs.reshape(lu-ll,nexbins[sp][sn])-slf._wavefull[sp][ll:lu].reshape(lu-ll,1))*gradv).flatten(0))
+			if np.all(1.0-slf._zerofull[sp][ll:lu]): # No zero-level is provided -- no interpolation is necessary
+				zerospx[sp] = np.append(zerospx[sp], np.zeros(np.size(wavs)))
+			else: # Do linear interpolation
+				gradA = np.append((slf._zerofull[sp][ll+1:lu]-slf._zerofull[sp][ll:lu-1])/(slf._wavefull[sp][ll+1:lu]-slf._wavefull[sp][ll:lu-1]),(slf._zerofull[sp][lu-1]-slf._zerofull[sp][lu-2])/(slf._wavefull[sp][lu-1]-slf._wavefull[sp][lu-2])).reshape(lu-ll,1)
+				gradB = np.append( (slf._zerofull[sp][ll+1]-slf._zerofull[sp][ll])/(slf._wavefull[sp][ll+1]-slf._wavefull[sp][ll]), (slf._zerofull[sp][ll+1:lu]-slf._zerofull[sp][ll:lu-1])/(slf._wavefull[sp][ll+1:lu]-slf._wavefull[sp][ll:lu-1]),(slf._zerofull[sp][lu-1]-slf._zerofull[sp][lu-2])/(slf._wavefull[sp][lu-1]-slf._wavefull[sp][lu-2])).reshape(lu-ll,1)
+				gradv = np.mean(np.array([gradA,gradB]),axis=0)
+				zerospx[sp] = np.append(zerospx[sp], (slf._zerofull[sp][ll:lu].reshape(lu-ll,1) + (wavs.reshape(lu-ll,nexbins[sp][sn])-slf._wavefull[sp][ll:lu].reshape(lu-ll,1))*gradv).flatten(0))
 		posnspx[sp].append(wavespx[sp].size)
 #	slf._wavespx, slf._posnspx = wavespx, posnspx
 #	slf._nexbins = nexbins
-	return wavespx, posnspx, nexbins
+	return wavespx, contspx, zerospx, posnspx, nexbins
 
 
 def load_par_influence(slf, parin):
@@ -935,4 +1068,20 @@ def load_parinfo(slf):
 		mtyp = slf._modpass['mtyp'][i]
 		parinfo, add = slf._funccall[mtyp].set_pinfo(slf._funcinst[mtyp], parinfo, level, slf._modpass, i)
 		level += add
+	# Test if some parameters are outside the limits
+	if slf._argflag['run']['limpar']:
+		for i in range(len(slf._modpass['p0'])):
+			if ((parinfo[i]['limited'][0] == 1) & (parinfo[i]['value'] < parinfo[i]['limits'][0])):
+				newval = parinfo[i]['limits'][0]
+			elif ((parinfo[i]['limited'][1] == 1) & (parinfo[i]['value'] > parinfo[i]['limits'][1])):
+				newval = parinfo[i]['limits'][1]
+			else:
+				continue
+			if type(slf._modpass['line'][i]) is int:
+				msgs.warn("A parameter that = {0:f} is not within specified limits on line -".format(slf._modpass['p0'][i])+msgs.newline()+slf._modlines[slf._modpass['line'][i]],verbose=slf._argflag['out']['verbose'])
+				msgs.info("Setting this parameter to the limiting value of the model: {0:f}".format(newval))
+			else:
+				msgs.warn("A parameter that = {0:f} is not within specified limits on line -".format(slf._modpass['p0'][i])+msgs.newline()+slf._modpass['line'][i],verbose=slf._argflag['out']['verbose'])
+				msgs.info("Setting this parameter to the limiting value of the model: {0:f}".format(newval))
+			slf._modpass['p0'][i], parinfo[i]['value'] = newval, newval
 	return parinfo, levadd

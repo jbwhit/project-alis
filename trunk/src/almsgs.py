@@ -45,7 +45,7 @@ class msgs:
 
 	def signal_handler(self, signalnum, handler):
 		if signalnum == 2:
-			info("Ctrl+C was pressed. Ending processes...")
+			self.info("Ctrl+C was pressed. Ending processes...")
 			sys.exit()
 
 	def error(self, msg, verbose=None):

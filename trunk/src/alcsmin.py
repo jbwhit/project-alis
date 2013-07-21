@@ -73,7 +73,7 @@ class alfit(object):
 	def __init__(self, fcn, xall=None, functkw={}, parinfo=None,
 				 ftol=1.e-10, xtol=1.e-10, gtol=1.e-10,
 				 damp=0., miniter=0, maxiter=200, factor=100., nprint=1,
-				 iterfunct='default', iterkw={}, nocovar=0,
+				 iterfunct='default', iterkw={}, nocovar=0, limpar=False,
 				 rescale=0, autoderivative=1, verbose=2, modpass=None, 
 				 diag=None, epsfcn=None, ncpus=None, fstep=1.0, debug=0, convtest=False):
 		"""
@@ -333,7 +333,7 @@ class alfit(object):
 		signal.signal(signal.SIGQUIT, self.signal_handler)
 
 		if fcn==None:
-			self.errmsg = "Usage: parms = alfit('myfunt', ... )"
+			self.errmsg = "Usage: parms = alfit('myfunct', ... )"
 			return
 
 		if iterfunct == 'default':
@@ -418,7 +418,7 @@ class alfit(object):
 		ifree = (numpy.nonzero(pfixed != 1))[0]
 		nfree = len(ifree)
 		if nfree == 0:
-			self.errmsg = 'no free parameters'
+			self.errmsg = 'No free parameters'
 			return
 
 		# Compose only VARYING parameters
@@ -430,17 +430,28 @@ class alfit(object):
 		limits = self.parinfo(parinfo, 'limits', default=[0.,0.], n=npar)
 		if (limited is not None) and (limits is not None):
 			# Error checking on limits in parinfo
+			if numpy.any((limited[:,0] & limited[:,1]) &
+								 (limits[:,0] >= limits[:,1]) &
+								 (pfixed == 0)):
+				self.errmsg = 'Parameter limits are not consistent'
+				return
 			if numpy.any( ((limited[:,0]==1) & (xall < limits[:,0])) |
 								 ((limited[:,1] == 1) & (xall > limits[:,1])) ):
 				# Find the parameter that is not within the limits
 				outlim = numpy.where( ((limited[:,0] == 1) & (xall < limits[:,0])) | ((limited[:,1] == 1) & (xall > limits[:,1])) )[0]
-				self.errmsg = "the parameter "+str(self.params[outlim][0])+" is not within parameter limits"
-				return
-			if numpy.any((limited[:,0] & limited[:,1]) &
-								 (limits[:,0] >= limits[:,1]) &
-								 (pfixed == 0)):
-				self.errmsg = 'PARINFO parameter limits are not consistent'
-				return
+				if limpar: # Push parameters to the model limits
+					for ol in range(len(outlim)):
+						if ((limited[outlim[ol],0] == 1) & (xall[outlim[ol]] < limits[outlim[ol],0])):
+							newval = limits[outlim[ol],0]
+						else:
+							newval = limits[outlim[ol],1]
+						msgs.warn("A parameter that = {0:s} is not within specified limits on line -".format(self.params[outlim][ol])+msgs.newline()+modpass['line'][outlim[ol]],verbose=verbose)
+						msgs.info("Setting this parameter to the limiting value of the model: {0:f}".format(newval))
+						xall[outlim][ol], self._params[outlim][ol] = newval, newval
+				else:
+					self.errmsg = [outlim,str(self.params[outlim][0])]
+					self.status = -21
+					return
 
 			# Transfer structure values to local variables
 			qulim = (limited[:,1])[ifree]
@@ -928,8 +939,8 @@ class alfit(object):
 		if verbose == 1 or modpass == None:
 			return
 		else:
-			prstr = print_model(x, modpass, verbose=verbose)
-			print prstr+"\n"
+			prstr, cvstr = print_model(x, modpass, verbose=verbose)
+			print prstr+cvstr
 			return 0
 
 
