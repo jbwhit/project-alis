@@ -442,7 +442,7 @@ class Voigt(alfunc_base.Base) :
 					restwave = self._atomic['Wavelength'][nv][nw][ln]
 					if pt[4] != 0.0: msgs.error("{0:s} {1:s} has no q-value.".format(self._keywd['ion'],str(restwave)))
 				else:
-					restwave = 1.0 / (1.0/self._atomic['Qvalue'][nv][nw][ln] + self._atomic['Qvalue'][nv][nw][ln]*pt[4]*1.0E-8)
+					restwave = 1.0 / (1.0/self._atomic['Wavelength'][nv][nw][ln] + self._atomic['Qvalue'][nv][nw][ln]*pt[4]*1.0E-8)
 				params[ln,:] = np.array([pt[0],pt[1],pt[3],restwave,self._atomic['fvalue'][nv][nw][ln],self._atomic['Gamma'][nv][nw][ln]])
 		else: # THE RATIO OF TWO COLUMN DENSITIES HAS BEEN SPECIFIED
 			# Find all denrat in mp with matching specid's.

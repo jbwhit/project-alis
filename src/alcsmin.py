@@ -1080,7 +1080,7 @@ class alfit(object):
 		h[h == 0.0] = eps * self.fstep
 
 		# In case any of the step values are very small
-		#h[h < 1.0E-10] = 1.0E-10
+		h[h < 1.0E-10] = 1.0E-10
 
 		# Reverse the sign of the step if we are up against the parameter
 		# limit, or if the user requested it.
@@ -1109,6 +1109,7 @@ class alfit(object):
 				xm[ifree[j]] -= h[j]
 				async_results.append(pool.apply_async(self.funcderiv, (fcn,fvec,functkw,j,xp,xm,h[j])))
 		pool.close()
+		pool.join()
 		map(ApplyResult.wait, async_results)
 		for j in range(n):
 			getVal = async_results[j].get()
