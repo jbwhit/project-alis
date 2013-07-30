@@ -9,7 +9,7 @@ class Base :
 	p[1] = x offset
 	p[2] = dispersion (sigma)
 	"""
-	def __init__(self, prgname="", getinst=False, verbose=2):
+	def __init__(self, prgname="", getinst=False, atomic=None, verbose=2):
 		self._idstr   = 'base'										# ID string for this class
 		self._pnumr   = 3											# Total number of parameters fed in
 		self._keywd   = dict({'specid':[], 'blind':False, 'wave':-1.0})			# Additional arguments to describe the model --- 'input' cannot be used as a keyword
@@ -27,6 +27,8 @@ class Base :
 		self._keywd['input'] = dict(zip((tempinput),([0]*np.size(tempinput)))) #
 		########################################################################
 		self._verbose = verbose
+		# Set the atomic data
+		self._atomic = atomic
 		if getinst: return
 
 	def call_CPU(self, x, p, ae='em', mkey=None, ncpus=1):
@@ -587,7 +589,8 @@ If you want your function to be recognised, you must
 include it's idstr value and the function call here.
 """
 
-def call(prgname="",getfuncs=False,getinst=False,verbose=2):
+def call(prgname="",getfuncs=False,getinst=False,atomic=None,verbose=2):
+	sendatomic = ['voigt']
 	# Add your new function to the following:
 	fd = dict({ 'Afwhm'          : alfunc_afwhm.AFWHM,
 				'brokenpowerlaw' : alfunc_brokenpowerlaw.BrokenPowerLaw,
@@ -610,7 +613,10 @@ def call(prgname="",getfuncs=False,getinst=False,verbose=2):
 	if getinst:
 		keys = fd.keys()
 		for i in range(len(keys)):
-			fd[keys[i]] = fd[keys[i]](prgname=prgname, getinst=getinst, verbose=verbose)
+			if keys[i] in sendatomic:
+				fd[keys[i]] = fd[keys[i]](prgname=prgname, getinst=getinst, verbose=verbose, atomic=atomic)
+			else:
+				fd[keys[i]] = fd[keys[i]](prgname=prgname, getinst=getinst, verbose=verbose)
 	if getfuncs:
 		return fd.keys()
 	else:

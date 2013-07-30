@@ -11,7 +11,7 @@ class Constant(alfunc_base.Base) :
 	A constant flux level:
 	p[0] = constant
 	"""
-	def __init__(self, prgname="", getinst=False, verbose=2):
+	def __init__(self, prgname="", getinst=False, atomic=None, verbose=2):
 		self._idstr   = 'constant'				# ID string for this class
 		self._pnumr   = 1						# Total number of parameters fed in
 		self._keywd   = dict({'specid':[], 'blind':False})		# Additional arguments to describe the model --- 'input' cannot be used as a keyword
@@ -30,6 +30,8 @@ class Constant(alfunc_base.Base) :
 		########################################################################
 		#self._kernal  = self.GPU_kernal()		# Get the Source Module for the GPU
 		self._verbose = verbose
+		# Set the atomic data
+		self._atomic = atomic
 		if getinst: return
 
 	def GPU_kernal(self):
