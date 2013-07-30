@@ -8,7 +8,7 @@ class AFWHM(alfunc_base.Base) :
 	Convolves the spectrum with a Gaussian with full-width at half-maxium AFWHM (in Angstroms):
 	p[0] = AFWHM
 	"""
-	def __init__(self, prgname="", getinst=False, verbose=2):
+	def __init__(self, prgname="", getinst=False, atomic=None, verbose=2):
 		self._idstr   = 'Afwhm'			# ID string for this class
 		self._pnumr   = 1				# Total number of parameters fed in
 		self._keywd   = dict({'blind':False})		# Additional arguments to describe the model --- 'input' cannot be used as a keyword
@@ -26,6 +26,8 @@ class AFWHM(alfunc_base.Base) :
 		self._keywd['input'] = dict(zip((tempinput),([0]*np.size(tempinput)))) #
 		########################################################################
 		self._verbose = verbose
+		# Set the atomic data
+		self._atomic = atomic
 		if getinst: return
 
 	def call_CPU(self, x, y, p, ncpus=1):

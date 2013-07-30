@@ -12,7 +12,7 @@ class Linear(alfunc_base.Base) :
 	p[0] = y intercept
 	p[1] = gradient
 	"""
-	def __init__(self, prgname="", getinst=False, verbose=2):
+	def __init__(self, prgname="", getinst=False, atomic=None, verbose=2):
 		self._idstr   = 'linear'					# ID string for this class
 		self._pnumr   = 2							# Total number of parameters fed in
 		self._keywd   = dict({'specid':[], 'blind':False})		# Additional arguments to describe the model --- 'input' cannot be used as a keyword
@@ -31,6 +31,8 @@ class Linear(alfunc_base.Base) :
 		########################################################################
 		#self._kernal  = self.GPU_kernal()			# Get the Source Module for the GPU
 		self._verbose = verbose
+		# Set the atomic data
+		self._atomic = atomic
 		if getinst: return
 
 	def GPU_kernal(self):

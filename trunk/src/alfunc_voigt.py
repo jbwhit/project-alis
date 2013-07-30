@@ -5,7 +5,6 @@ import alfunc_base
 #import pycuda.driver as cuda
 #import pycuda.autoinit
 #from pycuda.compiler import SourceModule
-from astropy.io.votable.table import parse_single_table
 msgs=almsgs.msgs()
 
 class Voigt(alfunc_base.Base) :
@@ -16,7 +15,7 @@ class Voigt(alfunc_base.Base) :
 	p[2] = turbulent Doppler parameter
 	p[3] = temperature
 	"""
-	def __init__(self, prgname="", getinst=False, loadatomic=False, atmname="atomic.xml", verbose=2):# atomic_rjc.xml is default
+	def __init__(self, prgname="", getinst=False, atomic=None, verbose=2):
 		self._idstr   = 'voigt'																				# ID string for this class
 		self._pnumr   = 6																					# Total number of parameters fed in
 		self._keywd   = dict({'specid':[], 'blind':False, 'ion':'', 'logN':True})							# Additional arguments to describe the model --- 'input' cannot be used as a keyword
@@ -34,8 +33,8 @@ class Voigt(alfunc_base.Base) :
 		self._keywd['input'] = dict(zip((tempinput),([0]*np.size(tempinput)))) #
 		########################################################################
 		self._verbose = verbose
-		# Load the atomic data
-		if prgname != "": self.load_atomic(prgname=prgname, atmname=atmname)
+		# Set the atomic data
+		self._atomic = atomic
 		#self._kernal  = self.GPU_kernal()										# Get the Source Module for the GPU
 		if getinst: return
 
@@ -134,39 +133,6 @@ class Voigt(alfunc_base.Base) :
 		}
 		""")
 		if getinst: return
-
-	def load_atomic(self, prgname="", atmname="atomic.xml"):
-		"""
-		Load the atomic transitions data
-		"""
-		msgs.info("Loading atomic data for function "+self._idstr, verbose=self._verbose)
-		prgn_spl = prgname.split('/')
-		fname = ""
-		for i in range(0,len(prgn_spl)-1): fname += prgn_spl[i]+"/"
-		# If the user specifies the atomic data file, make sure that it exists
-		if os.path.exists(fname+atmname):
-			msgs.info("Using atomic datafile:"+msgs.newline()+fname+atmname, verbose=self._verbose)
-		else:
-			msgs.warn("Couldn't find atomic datafile:"+msgs.newline()+fname+atmname, verbose=self._verbose)
-			msgs.info("Using atomic datafile:"+msgs.newline()+fname+"atomic.xml", verbose=self._verbose)
-			atmname="atomic.xml"
-		fname += atmname
-		try:
-			table = parse_single_table(fname)
-		except IOError:
-			msgs.error("The filename does not exist -"+msgs.newline()+fname)
-		isotope = table.array['MassNumber'].astype("|S3").astype(np.object)+table.array['Element']
-		self._eln = np.array(isotope+"_"+table.array['Ion'])
-		self._elw = np.array(table.array['RestWave'])
-		self._elf = np.array(table.array['fval'])
-		self._elt = np.array(table.array['Gamma'])
-		self._elq = np.array(table.array['q'])
-		self._elK = np.array(table.array['K'])
-		seen = set()
-		self._elname = np.array([x for x in isotope if x not in seen and not seen.add(x)])
-		seen = set()
-		self._elmass = np.array([x for x in table.array['AtomicMass'] if x not in seen and not seen.add(x)])
-		return
 
 	def call_CPU(self, wave, pin, ae='ab', mkey=None, ncpus=1):
 		"""
@@ -311,7 +277,7 @@ class Voigt(alfunc_base.Base) :
 					kywrd.append(isspl[i])
 					if '/' in kwspl[1]:
 						ionspl = kwspl[1].split('/')
-						if ionspl[0] in self._eln and ionspl[1] in self._eln:
+						if ionspl[0] in self._atomic['Ion'] and ionspl[1] in self._atomic['Ion']:
 							numpar = 1
 						else: msgs.error("Keyword '"+isspl[i]+"' has incorrect form on line -"+msgs.newline()+self._idstr+"   "+instr)
 				else: msgs.error("Keyword '"+isspl[i]+"' is unknown for -"+msgs.newline()+self._idstr+"   "+instr)
@@ -446,17 +412,17 @@ class Voigt(alfunc_base.Base) :
 		if '/' in self._keywd['ion']:
 			cdratio = True
 			numrat, denrat = self._keywd['ion'].split('/')
-			m = np.where(self._elname == numrat.split('_')[0])
+			m = np.where(self._atomic['Element'] == numrat.split('_')[0])
 			if np.size(m) != 1: msgs.error("Numerator element "+numrat+" not found for -"+msgs.newline()+self._keywd['ion'])
-			elmass = self._elmass[m][0]
+			elmass = self._atomic['AtomicMass'][m][0]
 		else: cdratio = False
 		if not cdratio: # THE COLUMN DENSITY FOR A SINGLE ION HAS BEEN SPECIFIED
 			pt=np.zeros(self._pnumr)
 			levadd=0
-			m = np.where(self._elname == self._keywd['ion'].split('_')[0])
-			if np.size(m) != 1: msgs.error("Element "+self._keywd['ion'].split('_')[0]+" not found in atomic data file")
+			m = np.where(self._atomic['Element'] == self._keywd['ion'].split('_')[0])
+			if np.size(m) != 1: msgs.error("Element {0:s} not found in atomic data file".format(self._keywd['ion'].split('_')[0]))
 			for i in range(self._pnumr):
-				parb = dict({'ap_1a':[None], 'ap_2a':pt[2], 'ap_2b':self._elmass[m][0]})
+				parb = dict({'ap_1a':[None], 'ap_2a':pt[2], 'ap_2b':self._atomic['AtomicMass'][m][0]})
 				if mp['mtie'][ival][i] != -1:
 					getid = mp['tpar'][mp['mtie'][ival][i]][1]
 				else:
@@ -464,20 +430,20 @@ class Voigt(alfunc_base.Base) :
 					levadd+=1
 				pt[i] = self.parin(i, p[getid], parb)
 				if mp['mfix'][ival][i] == 0: parinf.append(getid)
-			nv = np.where(self._eln == self._keywd['ion'])[0]
-			nw = np.where( (self._elw[nv]*(1.0+pt[1]) >= wvrng[0]) & (self._elw[nv]*(1.0+pt[1]) <= wvrng[1]) )
-			if self._elw[nv][nw].size == 0:
+			nv = np.where(self._atomic['Ion'] == self._keywd['ion'])[0]
+			nw = np.where( (self._atomic['Wavelength'][nv]*(1.0+pt[1]) >= wvrng[0]) & (self._atomic['Wavelength'][nv]*(1.0+pt[1]) <= wvrng[1]) )
+			if self._atomic['Wavelength'][nv][nw].size == 0:
 				if nexbin is not None: return [], None
 				elif getinfl: return [], []
 				else: return []
-			params = np.zeros((self._elw[nv][nw].size,6))
-			for ln in range(0,self._elw[nv][nw].size):
-				if np.isnan(self._elq[nv][nw][ln]) or self._elq[nv][nw][ln] is np.ma.masked:
-					restwave = self._elw[nv][nw][ln]
-					if pt[4] != 0.0: msgs.error(self._keywd['ion']+" "+str(restwave)+" has no q-value.")
+			params = np.zeros((self._atomic['Wavelength'][nv][nw].size,6))
+			for ln in range(0,self._atomic['Wavelength'][nv][nw].size):
+				if np.isnan(self._atomic['Qvalue'][nv][nw][ln]) or self._atomic['Qvalue'][nv][nw][ln] is np.ma.masked:
+					restwave = self._atomic['Wavelength'][nv][nw][ln]
+					if pt[4] != 0.0: msgs.error("{0:s} {1:s} has no q-value.".format(self._keywd['ion'],str(restwave)))
 				else:
-					restwave = 1.0 / (1.0/self._elw[nv][nw][ln] + self._elq[nv][nw][ln]*pt[4]*1.0E-8)
-				params[ln,:] = np.array([pt[0],pt[1],pt[3],restwave,self._elf[nv][nw][ln],self._elt[nv][nw][ln]])
+					restwave = 1.0 / (1.0/self._atomic['Qvalue'][nv][nw][ln] + self._atomic['Qvalue'][nv][nw][ln]*pt[4]*1.0E-8)
+				params[ln,:] = np.array([pt[0],pt[1],pt[3],restwave,self._atomic['fvalue'][nv][nw][ln],self._atomic['Gamma'][nv][nw][ln]])
 		else: # THE RATIO OF TWO COLUMN DENSITIES HAS BEEN SPECIFIED
 			# Find all denrat in mp with matching specid's.
 			pt=[]
@@ -521,19 +487,19 @@ class Voigt(alfunc_base.Base) :
 #					else:
 #						pt[-1][j] = self.parin(j, p[level+levaddi], parb)
 #						levaddi+=1
-				nv = np.where(self._eln == numrat)[0]
-				nw = np.where( (self._elw[nv]*(1.0+pt[-1][1]) >= wvrng[0]) & (self._elw[nv]*(1.0+pt[-1][1]) <= wvrng[1]) )
-				paramst = np.zeros((self._elw[nv][nw].size,6))
-				for ln in range(0,self._elw[nv][nw].size):
-					if np.isnan(self._elq[nv][nw][ln]) or self._elq[nv][nw][ln] is np.ma.masked:
-						restwave = self._elw[nv][nw][ln]
+				nv = np.where(self._atomic['Ion'] == numrat)[0]
+				nw = np.where( (self._atomic['Wavelength'][nv]*(1.0+pt[-1][1]) >= wvrng[0]) & (self._atomic['Wavelength'][nv]*(1.0+pt[-1][1]) <= wvrng[1]) )
+				paramst = np.zeros((self._atomic['Wavelength'][nv][nw].size,6))
+				for ln in range(0,self._atomic['Wavelength'][nv][nw].size):
+					if np.isnan(self._atomic['Qvalue'][nv][nw][ln]) or self._atomic['Qvalue'][nv][nw][ln] is np.ma.masked:
+						restwave = self._atomic['Wavelength'][nv][nw][ln]
 						if pt[-1][4] != 0.0: msgs.error(self._keywd['ion']+" "+str(restwave)+" has no q-value.")
 					else:
-						restwave = 1.0 / (1.0/self._elw[nv][nw][ln] + self._elq[nv][nw][ln]*pt[-1][4]*1.0E-8)
-					paramst[ln,:] = np.array([pt[-1][0],pt[-1][1],pt[-1][3],restwave,self._elf[nv][nw][ln],self._elt[nv][nw][ln]])
+						restwave = 1.0 / (1.0/self._atomic['Wavelength'][nv][nw][ln] + self._atomic['Qvalue'][nv][nw][ln]*pt[-1][4]*1.0E-8)
+					paramst[ln,:] = np.array([pt[-1][0],pt[-1][1],pt[-1][3],restwave,self._atomic['fvalue'][nv][nw][ln],self._atomic['Gamma'][nv][nw][ln]])
 				if tsize == 0: params = paramst
 				else: params = np.append(params, paramst, axis=0)
-				tsize += self._elw[nv][nw].size
+				tsize += self._atomic['Wavelength'][nv][nw].size
 			if tsize == 0:
 				if nexbin is not None: return [], None
 				elif getinfl: return [], []

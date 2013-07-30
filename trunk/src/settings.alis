@@ -45,6 +45,7 @@ sim dirname       sims          # Name of the folder to dump the output from the
 sim edgecut       4.0           # Number of sigma (based on the instrumental FWHM) to reject from generated data (due to edge effects)
 # GENERATE
 generate data False             # Generate fake data
+generate overwrite False        # If data already exist with this filename, overwrite it?
 generate pixelsize 2.5          # Pixel size (in units of run+bintype) for the generated wavelength array
 generate peaksnr 0.0            # Signal-to-noise ratio (at the peak of the model) for the generated data (0.0 is used for perfect data)
 generate skyfrac 0.1            # What is the fractional contribution of the sky (relative to the peak of the model). The condition  skyfrac < (peak of model / peaksnr)  must hold.

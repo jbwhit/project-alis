@@ -4,6 +4,7 @@ import imp
 import copy
 import getopt
 import astropy.io.fits as pyfits
+from astropy.io.votable.table import parse_single_table
 import numpy as np
 import almsgs
 from multiprocessing import cpu_count
@@ -132,7 +133,8 @@ def set_params(lines, argflag, setstr=""):
 	setstr   : a string argument for error messages that tells the user which file the error occured in.
 	"""
 	for i in range(len(lines)):
-		if lines[i][0] == '#' or lines[i] == '' or lines[i] == '\n': continue
+		if lines[i] == '': continue
+		if lines[i][0] == '#' or lines[i] == '\n': continue
 		linspl = lines[i].split()
 		if linspl[0] in argflag.keys():
 			if linspl[1] in argflag[linspl[0]].keys():
@@ -178,7 +180,7 @@ def load_settings(fname,verbose=2):
 		pla = dict({'dims':'3x3', 'fits':True, 'xaxis':'observed', 'labels':False, 'only':False, 'pages':'all'})
 		opa = dict({'model':True, 'fits':False, 'onefits':False, 'overwrite':False, 'sm':False, 'verbose':2, 'reletter':False, 'covar':"", 'convtest':""})
 		mca = dict({'random':None, 'systematics':False, 'beginfrom':"", 'startid':0, 'systmodule':None, 'newstart':True, 'dirname':'sims', 'edgecut':4.0})
-		gna = dict({'pixelsize':2.5, 'data':False, 'peaksnr':0.0, 'skyfrac':0.0})
+		gna = dict({'pixelsize':2.5, 'data':False, 'overwrite':False, 'peaksnr':0.0, 'skyfrac':0.0})
 		itr = dict({'model':None, 'data':None})
 		argflag = dict({'run':rna, 'chisq':csa, 'plot':pla, 'out':opa, 'sim':mca, 'generate':gna, 'iterate':itr})
 		return argflag
@@ -241,19 +243,38 @@ def check_argflag(argflag, curcpu=None):
 		except: msgs.error("Could not import module {0:s}".format(argflag['sim']['systmodule']))
 	return
 
-def load_input(slf, filename=None, updateself=True):
+def load_input(slf, filename=None, textstr=None, updateself=True):
 	# Read in the model file
-	msgs.info("Loading the input file",verbose=slf._argflag['out']['verbose'])
-	if filename is None:
-		loadname = slf._argflag['run']['modname']
+	if textstr is not None:
+		if type(textstr) is str:
+			lines = textstr.split("\n")
+		elif type(textstr) is list:
+			lines = textstr
+		else:
+			msgs.error("The keyword value for textstr in load.load_input is not understood")
 	else:
-		loadname = filename
-	try:
-		infile = open(loadname, 'r')
-	except IOError:
-		msgs.error("The filename does not exist -"+msgs.newline()+loadname)
-		sys.exit()
-	lines = infile.readlines()
+		msgs.info("Loading the input file",verbose=slf._argflag['out']['verbose'])
+		if filename is None:
+			loadname = slf._argflag['run']['modname']
+		else:
+			loadname = filename
+		if loadname.split(".")[-1] == "fits":
+			# This could be an ALIS onefits file.
+			parlines, datlines, modlines = load_onefits(slf,loadname)
+			argflag = set_params(parlines, copy.deepcopy(slf._argflag), setstr="OneFits ")
+			# Check the settings are OK.
+			check_argflag(argflag, curcpu=slf._argflag['run']['ncpus'])
+			msgs.info("Input file loaded successfully",verbose=slf._argflag['out']['verbose'])
+			if updateself:
+				slf._argflag = argflag
+			return parlines, datlines, modlines
+		try:
+			infile = open(loadname, 'r')
+		except IOError:
+			msgs.error("The filename does not exist -"+msgs.newline()+loadname)
+			sys.exit()
+		lines = infile.readlines()
+	# Separate the lines into par-, dat-, and mod- lines.
 	parlines = []
 	datlines = []
 	modlines = []
@@ -320,6 +341,49 @@ def load_input(slf, filename=None, updateself=True):
 		slf._argflag = argflag
 	return parlines, datlines, modlines
 
+def load_atomic(slf):
+	"""
+	Load the atomic transitions data
+	"""
+	prgname, atmname = slf._argflag['run']['prognm'], slf._argflag['run']['atomic']
+	msgs.info("Loading atomic data", verbose=slf._argflag['out']['verbose'])
+	prgn_spl = prgname.split('/')
+	fname = ""
+	for i in range(0,len(prgn_spl)-1): fname += prgn_spl[i]+"/"
+	# If the user specifies the atomic data file, make sure that it exists
+	if os.path.exists(fname+atmname):
+		msgs.info("Using atomic datafile:"+msgs.newline()+fname+atmname, verbose=slf._argflag['out']['verbose'])
+	else:
+		msgs.warn("Couldn't find atomic datafile:"+msgs.newline()+fname+atmname, verbose=slf._argflag['out']['verbose'])
+		msgs.info("Using atomic datafile:"+msgs.newline()+fname+"atomic.xml", verbose=slf._argflag['out']['verbose'])
+		atmname="atomic.xml"
+	fname += atmname
+	try:
+		table = parse_single_table(fname)
+	except IOError:
+		msgs.error("The filename does not exist -"+msgs.newline()+fname)
+	isotope = table.array['MassNumber'].astype("|S3").astype(np.object)+table.array['Element']
+	atmdata = dict({})
+	# eln = Ion
+	# elw = Wavelength
+	# elt = Gamma
+	# elf = fvalue
+	# elq = Qvalue
+	# elK = Kvalue
+	# elname = Element
+	# elmass = AtomicMass
+	atmdata['Ion'] = np.array(isotope+"_"+table.array['Ion'])
+	atmdata['Wavelength'] = np.array(table.array['RestWave'])
+	atmdata['fvalue'] = np.array(table.array['fval'])
+	atmdata['Gamma'] = np.array(table.array['Gamma'])
+	atmdata['Qvalue'] = np.array(table.array['q'])
+	atmdata['Kvalue'] = np.array(table.array['K'])
+	seen = set()
+	atmdata['Element'] = np.array([x for x in isotope if x not in seen and not seen.add(x)])
+	seen = set()
+	atmdata['AtomicMass'] = np.array([x for x in table.array['AtomicMass'] if x not in seen and not seen.add(x)])
+	return atmdata
+
 def load_data(slf, datlines, data=None):
 	"""
 	Load the observed data
@@ -337,8 +401,8 @@ def load_data(slf, datlines, data=None):
 	# Now begin
 	specid=np.array([])
 	slf._snipid=[]
-	datopt = dict({'plotone':[],'nsubpix':[],'bintype':[],'columns':[],'systematics':[],'systmodule':[]})
-	keywords = ['specid','fitrange','systematics','systmodule','resolution','columns','plotone','nsubpix','bintype','loadall']
+	datopt = dict({'specid':[],'fitrange':[],'plotone':[],'nsubpix':[],'bintype':[],'columns':[],'systematics':[],'systmodule':[],'label':[]})
+	keywords = ['specid','fitrange','systematics','systmodule','resolution','columns','plotone','nsubpix','bintype','loadall','label']
 	colallow = np.array(['wave','flux','error','continuum','zerolevel','fitrange','systematics','resolution'])
 	columns  = np.array(['wave','flux','error'])
 	systload = [None, 'continuumpoly']
@@ -354,7 +418,7 @@ def load_data(slf, datlines, data=None):
 			filename = "Data read from 'data' keyword"
 			linspl.insert(0,linspl[0])
 		if not os.path.exists(filename) and data is None:
-			if not slf._argflag['generate']['data']: msgs.error("File does not exist -"+msgs.newline()+filename)
+			if not slf._argflag['generate']['data'] and not slf._isonefits: msgs.error("File does not exist -"+msgs.newline()+filename)
 		fitfromcol, systfromcol, resnfromcol, specidgiven = False, False, False, False
 		fitspl, systfrom, resnfrom = [''], '', ''
 		if len(linspl) > 1:
@@ -433,6 +497,9 @@ def load_data(slf, datlines, data=None):
 		datopt['systmodule'].append([])
 		datopt['nsubpix'].append([])
 		datopt['bintype'].append([])
+		datopt['label'].append([])
+		datopt['specid'].append([])
+		datopt['fitrange'].append([])
 		snipnames.append([])
 		posnfull.append([])
 		wavefull.append( np.array([]) )
@@ -450,6 +517,7 @@ def load_data(slf, datlines, data=None):
 		zerofit.append( np.array([]) )
 	# Load data for each specid.
 	if len(specid) == 1: sind = 0
+	datnum=1
 	for i in range(0,len(datlines)):
 		if len(datlines[i].strip()) == 0 : continue # Nothing on a line
 		nocoms = datlines[i].lstrip().split('#')[0] # Remove everything on a line after the first instance of a comment symbol: #
@@ -463,6 +531,9 @@ def load_data(slf, datlines, data=None):
 			filename = "Data read from 'data' keyword"
 			linspl.insert(0,linspl[0])
 		setplot,loadall=False,False
+		uselabel  = ''
+		specidtxt = ''
+		fitrtxt   = ''
 		nspix = slf._argflag['run']['nsubpix']
 		bntyp = slf._argflag['run']['bintype']
 		tempresn = 'vfwhm(0.0)' # If Resolution not specified set it to zero and make it not tied to anything.
@@ -471,7 +542,9 @@ def load_data(slf, datlines, data=None):
 		if len(linspl) > 1:
 			for j in range(1,len(linspl)):
 				kwdspl = linspl[j].split('=')
-				if   kwdspl[0] == 'specid': sind = np.where(specid == kwdspl[1])[0][0]
+				if   kwdspl[0] == 'specid':
+					sind = np.where(specid == kwdspl[1])[0][0]
+					specidtxt = linspl[j]
 				elif kwdspl[0] == 'resolution':
 					if kwdspl[1].lower() == 'none':
 						tempresn = 'vfwhm(0.0)'
@@ -484,6 +557,7 @@ def load_data(slf, datlines, data=None):
 					else: msgs.error("nsubpix must be greater than 0")
 				elif kwdspl[0] == 'bintype': bntyp = kwdspl[1]
 				elif kwdspl[0] == 'fitrange':
+					fitrtxt = linspl[j]
 					fitspl = kwdspl[1].strip('[]()').split(',')
 					if len(fitspl) == 2:
 						wavemin, wavemax = np.float64(fitspl[0]), np.float64(fitspl[1])
@@ -508,15 +582,22 @@ def load_data(slf, datlines, data=None):
 						else: wfe[clspid[0].strip()] = k
 				elif kwdspl[0] == 'plotone' and kwdspl[1] in ['True','true','TRUE']:
 					setplot = True # Force this plot to be shown by itself
+				elif kwdspl[0] == 'label':
+					uselabel = kwdspl[1]
 				elif kwdspl[0] == 'loadall' and kwdspl[1] in ['True','true','TRUE']:
 					loadall = True # Force this plot to be shown by itself
 		try:
 			# Check first if we are supposed to generate our own data
 			if slf._argflag['generate']['data']:
-				if os.path.exists(filename):
+				if os.path.exists(filename) and not slf._argflag['generate']['overwrite']:
+					msgs.info("Reading in the following file to generate data:"+msgs.newline()+filename,verbose=slf._argflag['out']['verbose'])
 					wavein, fluxin, fluein, contin, zeroin, systin, fitrin = load_datafile(filename, colspl, wfe, verbose=slf._argflag['out']['verbose'])
 				else:
-					msgs.warn("The following file does not exist:"+msgs.newline()+filename,verbose=slf._argflag['out']['verbose'])
+					if os.path.exists(filename) and slf._argflag['generate']['overwrite']:
+						msgs.warn("Overwriting the following file:"+msgs.newline()+filename,verbose=slf._argflag['out']['verbose'])
+						os.remove(filename)
+					else:
+						msgs.warn("The following file does not exist:"+msgs.newline()+filename,verbose=slf._argflag['out']['verbose'])
 					msgs.info("Generating a wavelength array for this file",verbose=slf._argflag['out']['verbose'])
 					# Do some checks
 					if wavemin < 0.0 or wavemax < 0.0:
@@ -538,6 +619,9 @@ def load_data(slf, datlines, data=None):
 						contin, zeroin, systin, fitrin = np.zeros(wavein.size), np.zeros(wavein.size), np.zeros(wavein.size), np.ones(wavein.size)
 					else:
 						msgs.error("Sorry, I do not know the bintype: {0:s}".format(bntyp))
+			# Is this a onefits file?
+			elif slf._isonefits:
+				wavein, fluxin, fluein, contin, zeroin, systin, fitrin = load_fits(slf._argflag['run']['modname'], colspl, wfe, verbose=slf._argflag['out']['verbose'], ext=datnum)
 			# Has the user passed in their own data array?
 			elif data is not None:
 				wavein, fluxin, fluein, contin, zeroin, systin, fitrin = load_userdata(data, colspl, wfe, verbose=slf._argflag['out']['verbose'])
@@ -549,7 +633,10 @@ def load_data(slf, datlines, data=None):
 		# Store the filename for later
 		snipnames[sind].append(filename)
 		resn[sind] = np.append(resn[sind], tempresn)
+		datopt['specid'][sind].append(specidtxt)
 		datopt['plotone'][sind].append(setplot)
+		datopt['label'][sind].append(uselabel)
+		datopt['fitrange'][sind].append(fitrtxt)
 		datopt['columns'][sind].append(wfe)
 		datopt['bintype'][sind].append(bntyp)
 		datopt['systematics'][sind].append(systfile)
@@ -594,6 +681,7 @@ def load_data(slf, datlines, data=None):
 		contfull[sind] = np.append(contfull[sind], contin[w])
 		zerofull[sind] = np.append(zerofull[sind], zeroin[w])
 		systfull[sind] = np.append(systfull[sind], systin[w])
+		datnum += 1
 	# And finally append the total size of the array.
 	for i in range(specid.size):
 		posnfull[i].append(wavefull[i].size)
@@ -661,12 +749,13 @@ def load_datafile(filename, colspl, wfe, verbose=2):
 	wfek = wfe.keys()
 	dattyp = filename.split(".")[-1]
 	if dattyp in ['dat', 'ascii']:
-		return load_ascii(filename, colspl, wfe, wfek)
+		return load_ascii(filename, colspl, wfe, wfek, verbose=verbose)
 	elif dattyp in ['fits','fit']:
-		return load_fits(filename, colspl, wfe)
+		return load_fits(filename, colspl, wfe, verbose=verbose)
 	else:
 		msgs.error("Sorry, I don't know how to read in ."+dattyp+" files.")
 	return
+
 
 def load_ascii(filename, colspl, wfe, wfek, verbose=2):
 #	usecols=()
@@ -708,19 +797,37 @@ def load_ascii(filename, colspl, wfe, wfek, verbose=2):
 	return wavein, fluxin, fluein, contin, zeroin, systin, fitrin
 
 
-def load_fits(filename, colspl, wfe, verbose=2):
+def load_fits(filename, colspl, wfe, verbose=2, ext=0):
 	infile = pyfits.open(filename)
-	datain=infile[0].data
-	# Load the wavelength scale
-	crvala=infile[0].header['crval1']
-	cdelta=infile[0].header['cdelt1']
-	crpixa=infile[0].header['crpix1']
-	cdelt_alta=infile[0].header['cd1_1']
-	if cdelta == 0.0: cdelta = cdelt_alta
-	pixscalea=infile[0].header['cdelt1']
-	wrng = np.arange(datain.shape[1])
-	wavein = 10.0**(((wrng - (crpixa - 1))*cdelta)+crvala)
-	fluxin, fluein = datain[wfe['flux'],:], datain[wfe['error'],:]
+	datain=infile[ext].data
+	foundtype=False
+	# First test what format the data file is
+	try: # Is it an ALIS file?
+		alisfits = infile[0].header['alisfits']
+		if alisfits == "onefits":
+			wavein, fluxin, fluein = datain[wfe['wave'],:], datain[wfe['flux'],:], datain[wfe['error'],:]
+		elif alisfits == "fits":
+			wavein, fluxin, fluein = datain[wfe['wave'],:], datain[wfe['flux'],:], datain[wfe['error'],:]
+		foundtype = True
+	except:
+		pass # This is not an ALIS fits file.
+	if not foundtype:
+		try:
+			# Load the wavelength scale
+			crvala=infile[0].header['crval1']
+			cdelta=infile[0].header['cdelt1']
+			crpixa=infile[0].header['crpix1']
+			cdelt_alta=infile[0].header['cd1_1']
+			if cdelta == 0.0: cdelta = cdelt_alta
+			pixscalea=infile[0].header['cdelt1']
+			wrng = np.arange(datain.shape[1])
+			wavein = 10.0**(((wrng - (crpixa - 1))*cdelta)+crvala)
+			fluxin, fluein = datain[wfe['flux'],:], datain[wfe['error'],:]
+		except:
+			pass # This is not supported by the IRAF fits file format.
+	if not foundtype:
+		msgs.error("ALIS could not identify the type of fits file used")
+	# Read in the other columns of data
 	ncols = datain.shape[1]
 	if len(colspl) > ncols:
 		msgs.error("The following file -"+msgs.newline()+filename+msgs.newline()+"only has "+str(ncols)+" columns")
@@ -890,6 +997,130 @@ def load_model(slf, modlines, updateself=True):
 		slf._funcused = funcused
 	modpass['line'] = pnumlin
 	return modpass
+
+
+def load_onefits(slf,loadname):
+	infile = pyfits.open(loadname)
+	# Check this is an ALIS onefits file
+	try:
+		if infile[0].header['alisfits'] != "onefits": 1/0
+	except:
+		msgs.error("The input file is a fits file, but not an ALIS onefits file."+msgs.newline()+"ALIS does not accept models with extension *.fits unless it"+msgs.newline()+"is an ALIS onefits file. The offending filename is:"+msgs.newline()+loadname)
+	msgs.info("You have input an ALIS onefits file. What would you like to do?", verbose=slf._argflag['out']['verbose'])
+	print ""
+	print "  (1) Plot the starting model"
+	print "  (2) Plot the best-fitting model"
+	print "  (3) Print the best-fitting model"
+	print "  (4) Re-run the fit"
+	print "  (5) Extract the .mod file and the data"
+#	print "  (6) Plot the best-fitting model"
+#	print "  (7) Plot the best-fitting model"
+#	print "  (8) Plot the best-fitting model"
+#	print "  (9) Plot the best-fitting model"
+	print ""
+	ans=0
+	while ans not in [1,2,3,4,5]:
+		ans = raw_input(msgs.input()+"Please select an option (1,2,3,4,5) - ")
+		try:
+			ans = int(ans)
+		except:
+			pass
+	print ""
+	###########################
+	###  Plot the best-fitting model
+	###################
+	if ans == 1:
+		try:
+			tparlines, tdatlines, tmodlines = infile[0].header['parlines'], infile[0].header['datlines'], infile[0].header['modlines']
+			parlines = ''.join(chr(int(i)) for i in tparlines.split(","))
+			datlines = ''.join(chr(int(i)) for i in tdatlines.split(","))
+			modlines = ''.join(chr(int(i)) for i in tmodlines.split(","))
+		except:
+			msgs.error("The onefits file is corrupt")
+		slf._isonefits = True
+		return parlines.split("\n")+['plot only True'], datlines.split("\n"), modlines.split("\n")
+	elif ans == 2:
+		# Get the best-fitting output model file
+		try:
+			toutput = infile[0].header['output']
+			output  = ''.join(chr(int(i)) for i in toutput.split(","))
+		except:
+			msgs.error("The onefits file is corrupt")
+		parlines, datlines, modlines = load_input(slf,textstr=output)
+		slf._isonefits = True
+		return parlines+['plot only True'], datlines, modlines
+	###########################
+	###  Print the best-fitting model
+	###################
+	elif ans == 3:
+		try:
+			toutput = infile[0].header['output']
+			output  = ''.join(chr(int(i)) for i in toutput.split(","))
+		except:
+			msgs.error("The onefits file is corrupt")
+		print output
+		sys.exit()
+	###########################
+	###  Re-run the fit
+	###################
+	elif ans == 4:
+		# Get the input model file
+		try:
+			tparlines, tdatlines, tmodlines = infile[0].header['parlines'], infile[0].header['datlines'], infile[0].header['modlines']
+			parlines = ''.join(chr(int(i)) for i in tparlines.split(","))
+			datlines = ''.join(chr(int(i)) for i in tdatlines.split(","))
+			modlines = ''.join(chr(int(i)) for i in tmodlines.split(","))
+		except:
+			msgs.error("The onefits file is corrupt")
+		return parlines.split("\n"), datlines.split("\n"), modlines.split("\n")
+	###########################
+	###  Extract the .mod file and the data
+	###################
+	elif ans == 5:
+		tdirname = ".".join(loadname.split(".")[:-1])+"_dir"
+		dirname = tdirname
+		numtry=0
+		while os.path.exists(dirname):
+			dirname = tdirname + "{0:d}".format(numtry)
+			numtry += 1
+		os.mkdir(dirname)
+		os.mkdir(dirname+"/model")
+		os.mkdir(dirname+"/data")
+		# Extract the data
+		datnames=[]
+		for i in range(1,infile[0].header['numext']):
+			tname = infile[i].header['filename'].split("/")[-1]
+			datnames += [".".join(tname.split(".")[:-1])+".dat"]
+			np.savetxt(dirname+"/data/"+datnames[-1],np.transpose((infile[i].data)))
+		# Extract the starting model
+		try:
+			tparlines, tdatlines, tmodlines = infile[0].header['parlines'], infile[0].header['datlines'], infile[0].header['modlines']
+			parlines = ''.join(chr(int(i)) for i in tparlines.split(","))
+			datlines = ''.join(chr(int(i)) for i in tdatlines.split(","))
+			modlines = ''.join(chr(int(i)) for i in tmodlines.split(","))
+		except:
+			msgs.error("The onefits file is corrupt")
+		fmod = open(dirname+"/model/"+infile[0].header['modname'],'w')
+		fmod.write(parlines)
+		fmod.write("\ndata read\n")
+		# Change the name of the files in datlines
+		tdatlines = datlines.split("\n")
+		numdat=0
+		newdatlines=[]
+		for i in range(len(tdatlines)):
+			if len(tdatlines[i].strip()) == 0 : continue # Nothing on a line
+			datspl = tdatlines[i].split()
+			datspl[0] = "../data/{0:s}".format(datnames[numdat])
+			numdat += 1
+			newdatlines += ["  ".join(datspl)]
+		fmod.write("\n".join(newdatlines))
+		fmod.write("\ndata end\n\nmodel read\n")
+		fmod.write(modlines)
+		fmod.write("model end\n")
+		msgs.info("The model and data file were extracted into the directory:"+msgs.newline()+dirname,verbose=slf._argflag['out']['verbose'])
+		sys.exit()
+	else:
+		msgs.error("Sorry - option {0:d} is not implemented yet".format(ans))
 
 def load_subpixels(slf, parin):
 	nexbins = []

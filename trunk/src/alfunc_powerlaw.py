@@ -10,7 +10,7 @@ class PowerLaw(alfunc_base.Base) :
 	p[1] = x offset
 	p[2] = dispersion (sigma)
 	"""
-	def __init__(self, prgname="", getinst=False, verbose=2):
+	def __init__(self, prgname="", getinst=False, atomic=None, verbose=2):
 		self._idstr   = 'powerlaw'							# ID string for this class
 		self._pnumr   = 2								# Total number of parameters fed in
 		self._keywd   = dict({'specid':[], 'blind':False})			# Additional arguments to describe the model --- 'input' cannot be used as a keyword
@@ -28,6 +28,8 @@ class PowerLaw(alfunc_base.Base) :
 		self._keywd['input'] = dict(zip((tempinput),([0]*np.size(tempinput)))) #
 		########################################################################
 		self._verbose = verbose
+		# Set the atomic data
+		self._atomic = atomic
 		if getinst: return
 
 	def call_CPU(self, x, p, ae='em', mkey=None, ncpus=1):

@@ -17,4 +17,3 @@ def getreason(idnum,verbose=2):
 	else:
 		msgs.bug("Convergence reason is unknown (probably failed) --- please contact the author",verbose=verbose)
 		return "Convergence reason is unknown (probably failed) --- please contact the author"
-

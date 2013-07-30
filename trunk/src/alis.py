@@ -52,11 +52,7 @@ class ClassMain:
 		if verbose is not None: self._argflag['out']['verbose'] = verbose
 		self._retself = False
 		self._fitonly = fitonly
-
-		# Get the calls to each of the functions
-		self._function=alfunc_base.call(getfuncs=True, verbose=self._argflag['out']['verbose'])
-		self._funccall=alfunc_base.call(verbose=self._argflag['out']['verbose'])
-		self._funcinst=alfunc_base.call(prgname=self._argflag['run']['prognm'], getinst=True, verbose=self._argflag['out']['verbose'])
+		self._isonefits = False
 
 		# First send all signals to messages to be dealt
 		# with (i.e. someone hits ctrl+c)
@@ -82,6 +78,14 @@ class ClassMain:
 		else:
 			self._parlines, self._datlines, self._modlines = alload.load_input(self)
 
+		# Load the atomic data
+		self._atomic = alload.load_atomic(self)
+
+		# Get the calls to each of the functions
+		self._function=alfunc_base.call(getfuncs=True, verbose=self._argflag['out']['verbose'])
+		self._funccall=alfunc_base.call(verbose=self._argflag['out']['verbose'])
+		self._funcinst=alfunc_base.call(prgname=self._argflag['run']['prognm'], getinst=True, verbose=self._argflag['out']['verbose'],atomic=self._atomic)
+
 		# Update the verbosity of messages for functions
 		for i in self._funcinst.keys():
 			self._funcinst[i]._verbose = self._argflag['out']['verbose']
@@ -92,7 +96,9 @@ class ClassMain:
 		# Load the Model
 		self._modpass = alload.load_model(self, self._modlines)
 
-#		print self._argflag['sim']
+#		print self._modpass
+#		print self._snipid
+#		print self._specid
 #		sys.exit()
 
 		# Fit the data!
@@ -557,6 +563,8 @@ class ClassMain:
 						diff = np.abs(mpars.params-mt.params)/mt.perror
 						diff[np.where((mpars.params==mt.params) & (mt.perror==0.0))[0]] = 0.0
 						alconv.save_convtest(self, diff, self._argflag['run']['convcriteria'],fit_info)
+			# Store the fitting results
+			self._fitresults = m
 			# Write out the data and model fits
 			if self._argflag['out']['fits'] or self._argflag['out']['onefits']:
 				fnames = alsave.save_modelfits(self)
@@ -570,10 +578,12 @@ class ClassMain:
 				if self._argflag['run']['convergence']:
 					if mc.status != -20 and mpars.status != -20:
 						msgs.info("Printing out the parameter errors:",verbose=self._argflag['out']['verbose'])
-						print alsave.print_model(m.perror, self._modpass, blind=True, verbose=self._argflag['out']['verbose'])
+						printA, printB = alsave.print_model(m.perror, self._modpass, blind=True, verbose=self._argflag['out']['verbose'])
+						print printA, printB[0]
 				else:
 					msgs.info("Printing out the parameter errors:",verbose=self._argflag['out']['verbose'])
-					print alsave.print_model(m.perror, self._modpass, blind=True, verbose=self._argflag['out']['verbose'])
+					printA, printB = alsave.print_model(m.perror, self._modpass, blind=True, verbose=self._argflag['out']['verbose'])
+					print printA, printB[0]
 			if self._argflag['out']['model']:
 				fit_info=[(self._tend - self._tstart)/3600.0, m.fnorm, m.dof, m.niter, m.status]
 				alsave.save_model(self, m.params, m.perror, fit_info)
@@ -593,7 +603,6 @@ class ClassMain:
 					msgs.info("Starting simulations",verbose=self._argflag['out']['verbose'])
 					alsims.sim_random(self, m.covar, m.params, parinfo)
 		if self._retself == True:
-			self._fitresults = m
 			return self
 
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
@@ -631,20 +640,16 @@ def initialise(alispath, verbose=-1):
 	slf._argflag = argflag
 	slf._function=alfunc_base.call(getfuncs=True, verbose=slf._argflag['out']['verbose'])
 	slf._funccall=alfunc_base.call(verbose=slf._argflag['out']['verbose'])
-	slf._funcinst=alfunc_base.call(prgname=slf._argflag['run']['prognm'], getinst=True, verbose=slf._argflag['out']['verbose'])
+	slf._funcinst=alfunc_base.call(prgname=slf._argflag['run']['prognm'], getinst=True, verbose=slf._argflag['out']['verbose'],atomic=self._atomic)
 	return slf
 
 if __name__ == "__main__":
-	debug = True
+	debug = False
 	if debug:
 		msgs.bug("Read in resolution from column of data")
-		msgs.bug("Read in an optional label for each of the data, which can be used in plotting")
 		msgs.bug("With voigt function, if the user says to put an O I profile in specid A, make sure there is actually an O I line in specid A.")
 		msgs.bug("Prepare a separate .py file for user-created functions")
-		msgs.bug("Load atomic data that can be used by all functions")
-		msgs.bug("Update the datlines for the output files to include the best-fitting resolution model")
 		msgs.bug("Assign a number to every warning and error -- describe this in the manual")
-		msgs.bug("Still haven't written a onefits for saving fits files... or multiple fits files even!")
 		msgs.bug("If emission is not specified for a specid before absorption (in a model with several specid's), the specid printed as an error is always one before")
 		argflag = alload.optarg(os.path.realpath(__file__), argv=sys.argv[1:])
 		# Assign filelist:

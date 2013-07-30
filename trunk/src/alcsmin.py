@@ -940,7 +940,7 @@ class alfit(object):
 			return
 		else:
 			prstr, cvstr = print_model(x, modpass, verbose=verbose)
-			print prstr+cvstr
+			print prstr+cvstr[0]
 			return 0
 
 

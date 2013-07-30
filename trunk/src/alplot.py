@@ -43,6 +43,7 @@ def make_plots_all(slf, model=None):
 	pgcnt_arr = []
 	ps_wvarr, ps_fxarr, ps_fearr, ps_mdarr, ps_ctarr, ps_zrarr, ps_disps = [], [], [], [], [], [], []
 	po_wvarr, po_fxarr, po_fearr, po_mdarr, po_ctarr, po_zrarr, po_disps = [], [], [], [], [], [], []
+	ps_labels, po_labels = [], []
 	# Construct the arrays for the subplots
 	if pages == 0: # Only doing single plots
 		sp = snpid[snips_done]
@@ -55,6 +56,7 @@ def make_plots_all(slf, model=None):
 			po_mdarr.append([])
 			po_ctarr.append([])
 			po_zrarr.append([])
+			po_labels.append([])
 			llo=posnarr[sp][sn]
 			luo=posnarr[sp][sn+1]
 			po_disps[numone].append(0.5*np.append( (wavearr[sp][llo+1]-wavearr[sp][llo]), (wavearr[sp][llo+1:luo]-wavearr[sp][llo:luo-1]) ))
@@ -64,6 +66,7 @@ def make_plots_all(slf, model=None):
 			po_mdarr[numone].append(modlarr[sp][llo:luo])
 			po_ctarr[numone].append(contarr[sp][llo:luo])
 			po_zrarr[numone].append(zeroarr[sp][llo:luo])
+			po_labels[numone].append(slf._datopt['label'][sp][sn])
 			snips_done += 1
 			numone += 1
 			pltlst[sp] += 1
@@ -86,6 +89,7 @@ def make_plots_all(slf, model=None):
 			ps_mdarr.append([])
 			ps_ctarr.append([])
 			ps_zrarr.append([])
+			ps_labels.append([])
 #			ps_cparr.append([])
 			# Determine the number of panels for this page
 			if panels_left <= panppg: pgcnt = numsub-subpnl_done
@@ -101,6 +105,7 @@ def make_plots_all(slf, model=None):
 					po_mdarr.append([])
 					po_ctarr.append([])
 					po_zrarr.append([])
+					po_labels.append([])
 					llo=posnarr[sp][sn]
 					luo=posnarr[sp][sn+1]
 					po_disps[numone].append(0.5*np.append( (wavearr[sp][llo+1]-wavearr[sp][llo]), (wavearr[sp][llo+1:luo]-wavearr[sp][llo:luo-1]) ))
@@ -110,6 +115,7 @@ def make_plots_all(slf, model=None):
 					po_mdarr[numone].append(modlarr[sp][llo:luo])
 					po_ctarr[numone].append(contarr[sp][llo:luo])
 					po_zrarr[numone].append(zeroarr[sp][llo:luo])
+					po_labels[numone].append(slf._datopt['label'][sp][sn])
 					snips_done += 1
 					numone += 1
 					pltlst[sp] += 1
@@ -137,7 +143,8 @@ def make_plots_all(slf, model=None):
 				ps_mdarr[pg].append(modlarr[sp][ll:lu])
 				ps_ctarr[pg].append(contarr[sp][ll:lu])
 				ps_zrarr[pg].append(zeroarr[sp][ll:lu])
-#				ps_cparr[pg].append(comparr[sp][panels_done+i])
+				ps_labels[pg].append(slf._datopt['label'][sp][sn])
+				#				ps_cparr[pg].append(comparr[sp][panels_done+i])
 				pltlst[sp] += 1
 			snips_done += pgcnt
 			subpnl_done += pgcnt
@@ -148,11 +155,11 @@ def make_plots_all(slf, model=None):
 	po_wfemc = [po_wvarr, po_fxarr, po_fearr, po_mdarr, po_ctarr, po_zrarr]
 	msgs.info("Prepared {0:d} panels in subplots".format(subpnl_done), verbose=slf._argflag['out']['verbose'])
 	msgs.info("Prepared {0:d} panels in single plots".format(numone), verbose=slf._argflag['out']['verbose'])
-	numpagesA = plot_drawplots(pages, ps_wfemc, pgcnt_arr, ps_disps, dspl, slf._argflag, verbose=slf._argflag['out']['verbose'])
-	numpagesB = plot_drawplots(numone, po_wfemc, np.ones(numone).astype(np.int), po_disps, [1,1], slf._argflag, numpages=pages, verbose=slf._argflag['out']['verbose'])
+	numpagesA = plot_drawplots(pages, ps_wfemc, pgcnt_arr, ps_disps, dspl, slf._argflag, labels=ps_labels, verbose=slf._argflag['out']['verbose'])
+	numpagesB = plot_drawplots(numone, po_wfemc, np.ones(numone).astype(np.int), po_disps, [1,1], slf._argflag, labels=po_labels, numpages=pages, verbose=slf._argflag['out']['verbose'])
 	msgs.info("Plotted {0:d} pages".format(numpagesA+numpagesB), verbose=slf._argflag['out']['verbose'])
 
-def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, numpages=0, verbose=2):
+def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, labels=None, numpages=0, verbose=2):
 	"""
 	Plot the fitting results in mxn panels.
 	"""
@@ -218,7 +225,6 @@ def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, numpages=0, verb
 #					xfact = (1.0+rdshft)*elnw[1][pg][i]*(1.0+float(comparr[pg][i][3*j+1])/299792.458)
 #				ax.plot([xfact,xfact],[1.05,1.15], cstr)
 #				if flags['labels']: ax.text(xfact,1.2,comparr[pg][i][3*j+2],horizontalalignment='center',rotation='vertical',clip_on=True)
-#			if not argflag['plot']['labels']: ax.text(wmin+0.09*(wmax-wmin),0.2,elnw[0][pg][i]+' %5.1f' % (elnw[1][pg][i]))
 			ax.set_xlim(wmin,wmax)
 			ax.xaxis.set_major_locator(ticker.MaxNLocator(nbins=5))
 			ax.yaxis.set_major_locator(ticker.MaxNLocator(nbins=5))
@@ -232,6 +238,9 @@ def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, numpages=0, verb
 			ymax = np.max([modl_max+flue_med, 1.2*np.max(wfemcarr[4][pg][i])])
 			ax.set_ylim(-flue_med,ymax)
 			#ax.set_yticks((0,0.5,1.0))
+			# Plot the label
+			if argflag['plot']['labels'] and labels is not None:
+				if labels[pg][i] != "": ax.text(wmin+0.09*(wmax-wmin),-flue_med+0.2*(ymax+flue_med),labels[pg][i])
 		pgnum += 1
 	return pgnum
 

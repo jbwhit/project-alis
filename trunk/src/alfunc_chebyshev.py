@@ -21,7 +21,7 @@ class Chebyshev(alfunc_polynomial.Polynomial) :
 	write your own polynomial function for the polynomial order that interests
 	you.
 	"""
-	def __init__(self, prgname="", getinst=False, verbose=2):
+	def __init__(self, prgname="", getinst=False, atomic=None, verbose=2):
 		self._idstr   = 'chebyshev'								# ID string for this class
 		self._pnumr   = 1											# Total number of parameters fed in
 		self._keywd   = dict({'specid':[], 'blind':False, 'scale':[]})			# Additional arguments to describe the model --- 'input' cannot be used as a keyword
@@ -39,6 +39,8 @@ class Chebyshev(alfunc_polynomial.Polynomial) :
 		self._keywd['input'] = dict(zip((tempinput),([0]*np.size(tempinput)))) #
 		########################################################################
 		self._verbose = verbose
+		# Set the atomic data
+		self._atomic = atomic
 		if getinst: return
 
 	def call_CPU(self, x, p, ae='em', mkey=None, ncpus=1):
