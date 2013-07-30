@@ -578,12 +578,10 @@ class ClassMain:
 				if self._argflag['run']['convergence']:
 					if mc.status != -20 and mpars.status != -20:
 						msgs.info("Printing out the parameter errors:",verbose=self._argflag['out']['verbose'])
-						printA, printB = alsave.print_model(m.perror, self._modpass, blind=True, verbose=self._argflag['out']['verbose'])
-						print printA, printB[0]
+						print alsave.print_model(m.perror, self._modpass, blind=True, verbose=self._argflag['out']['verbose'])
 				else:
 					msgs.info("Printing out the parameter errors:",verbose=self._argflag['out']['verbose'])
-					printA, printB = alsave.print_model(m.perror, self._modpass, blind=True, verbose=self._argflag['out']['verbose'])
-					print printA, printB[0]
+					print alsave.print_model(m.perror, self._modpass, blind=True, verbose=self._argflag['out']['verbose'])
 			if self._argflag['out']['model']:
 				fit_info=[(self._tend - self._tstart)/3600.0, m.fnorm, m.dof, m.niter, m.status]
 				alsave.save_model(self, m.params, m.perror, fit_info)

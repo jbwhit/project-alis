@@ -748,7 +748,7 @@ def load_userdata(data, colspl, wfe, verbose=2):
 def load_datafile(filename, colspl, wfe, verbose=2):
 	wfek = wfe.keys()
 	dattyp = filename.split(".")[-1]
-	if dattyp in ['dat', 'ascii']:
+	if dattyp in ['dat', 'ascii', 'txt']:
 		return load_ascii(filename, colspl, wfe, wfek, verbose=verbose)
 	elif dattyp in ['fits','fit']:
 		return load_fits(filename, colspl, wfe, verbose=verbose)
@@ -823,6 +823,7 @@ def load_fits(filename, colspl, wfe, verbose=2, ext=0):
 			wrng = np.arange(datain.shape[1])
 			wavein = 10.0**(((wrng - (crpixa - 1))*cdelta)+crvala)
 			fluxin, fluein = datain[wfe['flux'],:], datain[wfe['error'],:]
+			foundtype = True
 		except:
 			pass # This is not supported by the IRAF fits file format.
 	if not foundtype:
