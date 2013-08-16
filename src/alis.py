@@ -397,6 +397,18 @@ class ClassMain:
 			model = self.myfunct(modpass['p0'], output=1)
 			msgs.info("Starting simulations",verbose=self._argflag['out']['verbose'])
 			alsims.sim_random(self, covar, modpass['p0'], parinfo)
+		elif self._argflag['sim']['perturb'] is not None and self._argflag['sim']['beginfrom'] != "":
+			import alsims
+			# If doing systematics you can skip the initial fit
+			# Get the covariance matrix from the best-fitting model
+			covar = np.loadtxt(self._argflag['sim']['beginfrom']+".covar")
+			# Load the best-fitting parameters
+			parlines, datlines, modlines = alload.load_input(self, filename=self._argflag['sim']['beginfrom'], updateself=False)
+			modpass = alload.load_model(self, modlines, updateself=False)
+			# Calculate the best-fitting model
+			model = self.myfunct(modpass['p0'], output=1)
+			msgs.info("Starting simulations",verbose=self._argflag['out']['verbose'])
+			alsims.perturb(self, covar, modpass['p0'], parinfo)
 		elif self._argflag['iterate']['model'] is not None:
 			# The user wants to iterate over the model
 			# Get the identifier text
@@ -600,6 +612,12 @@ class ClassMain:
 				else:
 					msgs.info("Starting simulations",verbose=self._argflag['out']['verbose'])
 					alsims.sim_random(self, m.covar, m.params, parinfo)
+			elif self._argflag['sim']['perturb'] != None:
+				import alsims
+				if m.perror is None or m.perror is m.params: msgs.warn("Fitting routine interrupted. Cannot perform simulations",verbose=self._argflag['out']['verbose'])
+				else:
+					msgs.info("Starting simulations",verbose=self._argflag['out']['verbose'])
+					alsims.perturb(self, m.covar, m.params, parinfo)
 		if self._retself == True:
 			return self
 
@@ -636,9 +654,10 @@ def initialise(alispath, verbose=-1):
 	argflag = alload.optarg(alispath, verbose=verbose)
 	slf = ClassMain(argflag,getinst=True)
 	slf._argflag = argflag
+	slf._atomic = alload.load_atomic(slf)
 	slf._function=alfunc_base.call(getfuncs=True, verbose=slf._argflag['out']['verbose'])
 	slf._funccall=alfunc_base.call(verbose=slf._argflag['out']['verbose'])
-	slf._funcinst=alfunc_base.call(prgname=slf._argflag['run']['prognm'], getinst=True, verbose=slf._argflag['out']['verbose'],atomic=self._atomic)
+	slf._funcinst=alfunc_base.call(prgname=slf._argflag['run']['prognm'], getinst=True, verbose=slf._argflag['out']['verbose'],atomic=slf._atomic)
 	return slf
 
 if __name__ == "__main__":

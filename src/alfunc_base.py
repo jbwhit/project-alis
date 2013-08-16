@@ -574,6 +574,7 @@ import alfunc_constant
 import alfunc_gaussian
 import alfunc_legendre
 import alfunc_linear
+import alfunc_lineemission
 import alfunc_polynomial
 import alfunc_powerlaw
 import alfunc_tophat
@@ -590,7 +591,7 @@ include it's idstr value and the function call here.
 """
 
 def call(prgname="",getfuncs=False,getinst=False,atomic=None,verbose=2):
-	sendatomic = ['voigt']
+	sendatomic = ['voigt', 'lineemission']
 	# Add your new function to the following:
 	fd = dict({ 'Afwhm'          : alfunc_afwhm.AFWHM,
 				'brokenpowerlaw' : alfunc_brokenpowerlaw.BrokenPowerLaw,
@@ -599,6 +600,7 @@ def call(prgname="",getfuncs=False,getinst=False,atomic=None,verbose=2):
 				'gaussian'       : alfunc_gaussian.Gaussian,
 				'legendre'       : alfunc_legendre.Legendre,
 				'linear'         : alfunc_linear.Linear,
+				'lineemission'   : alfunc_lineemission.LineEmission,
 				'polynomial'     : alfunc_polynomial.Polynomial,
 				'powerlaw'       : alfunc_powerlaw.PowerLaw,
 				'tophat'         : alfunc_tophat.TopHat,

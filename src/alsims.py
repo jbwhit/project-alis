@@ -22,6 +22,116 @@ def make_directory(dirname,overwrite=False,verbose=2):
 	else: os.mkdir(newdir)
 	return
 
+def perturb(slf, covar, bparams, parinfo):
+	# Decide how many characters to use for output files
+	nchr = str(np.int(np.log10(slf._argflag['sim']['perturb']))+1)
+	# Create the directory structure for the simulations
+	make_directory(slf._argflag['sim']['dirname'],overwrite=slf._argflag['out']['overwrite'],verbose=slf._argflag['out']['verbose'])
+	# Grab the best-fitting model
+	perror = np.sqrt(np.diag(covar))
+	# Store the starting parameters in an array
+	outpert = np.array([slf._modpass['p0']])
+	wavf, fluf, errf = np.array([]), np.array([]), np.array([])
+	for sp in range(len(slf._posnfull)):
+		wavf = np.append(wavf, slf._wavefit[sp].copy())
+		fluf = np.append(fluf, slf._fluxfit[sp].copy())
+		errf = np.append(errf, slf._fluefit[sp].copy())
+	# Find the non-zero elements in the covariance matrix
+	cvsize = covar.shape[0]
+	cxzero, cyzero = np.where(covar==0.0)
+	bxzero, byzero = np.bincount(cxzero), np.bincount(cyzero)
+	wxzero, wyzero = np.where(bxzero==cvsize)[0], np.where(byzero==cvsize)[0]
+	zrocol = np.intersect1d(wxzero, wyzero) # This is the list of columns (or rows), where all elements are zero
+	# Create a mask for the non-zero elements
+	mask=np.zeros_like(covar)
+	mask[:,zrocol],mask[zrocol,:]=1,1
+	cvnz=np.zeros((cvsize-zrocol.size,cvsize-zrocol.size))
+	cvnz[np.where(cvnz==0.0)]=covar[np.where(mask==0.0)]
+	# Generate a new set of starting parameters from the covariance matrix
+	X_covar_fit=np.matrix(np.random.standard_normal((cvnz.shape[0],slf._argflag['sim']['perturb'])))
+	C_covar_fit=np.matrix(cvnz)
+	U_covar_fit=np.linalg.cholesky(C_covar_fit)
+	Y_covar_fit=U_covar_fit * X_covar_fit
+	# Run through the simulations
+	for sim in range(slf._argflag['sim']['perturb']):
+		ntxt="{0:0"+nchr+"d}"
+		ntxt=ntxt.format(sim+slf._argflag['sim']['startid']) # Text Identifier used as output
+		msgs.test("PERTURB -- Realisation {0:s}/{1:s} began {2:s}".format(str(sim+1),str(slf._argflag['sim']['perturb']),time.ctime()),verbose=slf._argflag['out']['verbose'])
+		# Enter the new starting parameters
+		p0new = []
+		cntr=0
+		for pw in range(len(slf._modpass['p0'])):
+			if perror[pw] > 0.0:
+				# Check that the maximum level of perturbation has not been reached
+				if slf._modpass['p0'][pw] != 0.0:
+					if (Y_covar_fit[cntr,sim]).flatten()[0]/slf._modpass['p0'][pw] > slf._argflag['sim']['maxperturb']:
+						p0new.append( slf._modpass['p0'][pw]*(1.0+slf._argflag['sim']['maxperturb']) )
+						cntr+=1
+					elif (Y_covar_fit[cntr,sim]).flatten()[0]/slf._modpass['p0'][pw] < -1.0*slf._argflag['sim']['maxperturb']:
+						p0new.append( slf._modpass['p0'][pw]*(1.0-slf._argflag['sim']['maxperturb']) )
+						cntr+=1
+					else:
+						p0new.append( slf._modpass['p0'][pw]+(Y_covar_fit[cntr,sim]).flatten()[0] )
+						cntr+=1
+				else:
+					p0new.append( slf._modpass['p0'][pw]+(Y_covar_fit[cntr,sim]).flatten()[0] )
+					cntr+=1
+			else: p0new.append(slf._modpass['p0'][pw])
+		# Make sure all of the new parameters are within parinfo limits
+		for i in range(len(p0new)):
+			if parinfo[i]['limited'][0] == 1:
+				if parinfo[i]['limits'][0] > p0new[i]: p0new[i] = parinfo[i]['limits'][0]
+			if parinfo[i]['limited'][1] == 1:
+				if parinfo[i]['limits'][1] < p0new[i]: p0new[i] = parinfo[i]['limits'][1]
+			parinfo[i]['value'] = p0new[i]
+		#alsave.save_model(slf, p0new, mfit.perror, [(0.0 - 0.0)/3600.0, mfit.fnorm, mfit.dof, mfit.niter, mfit.status], printout=False, extratxt=[slf._argflag['sim']['dirname']+'/',".new"])
+		#np.savetxt(slf._argflag['run']['modname']+'.covar',mfit.covar)
+		fdict = slf.__dict__.copy()
+		fa = {'x':wavf, 'y':fluf, 'err':errf, 'fdict':fdict}
+		# Calculate the starting chi-squared
+		start_func = myfunct_wrap(p0new,output=2,**fa)
+		slf._chisq_init = np.sum(((fluf-start_func)/errf)**2)
+		if np.isnan(slf._chisq_init): msgs.error("Initial chi-squared is not a number")
+		if slf._chisq_init == np.Inf: msgs.error("Input chi-squared is Infinite"+msgs.newline()+"Perhaps the error spectrum is zero?")
+		# Fit the realisation
+#		msgs.info("Using {0:d} CPUs".format(slf._argflag['run']['ncpus']),verbose=slf._argflag['out']['verbose'])
+		tstart=time.time()
+		mr = alfit(myfunct_wrap, p0new, parinfo=parinfo, functkw=fa,
+					verbose=1, modpass=slf._modpass, miniter=slf._argflag['chisq']['miniter'], maxiter=slf._argflag['chisq']['maxiter'],
+					ftol=slf._argflag['chisq']['ftol'], gtol=slf._argflag['chisq']['gtol'], xtol=slf._argflag['chisq']['xtol'],
+					ncpus=slf._argflag['run']['ncpus'], fstep=slf._argflag['chisq']['fstep'])
+#		mr = alfit(myfunct_wrap, slf._modpass['p0'], parinfo=parinfo, functkw=fa,
+#					verbose=0, modpass=slf._modpass, miniter=slf._argflag['chisq']['miniter'], maxiter=slf._argflag['chisq']['maxiter'],
+#					ftol=slf._argflag['chisq']['ftol'], gtol=slf._argflag['chisq']['gtol'], xtol=slf._argflag['chisq']['xtol'],
+#					ncpus=slf._argflag['run']['ncpus'], fstep=slf._argflag['chisq']['fstep'])
+		tend=time.time()
+		if mr.status <= 0:
+			if mr.status == -20:
+				msgs.info("Simulation was interrupted",verbose=slf._argflag['out']['verbose'])
+				return
+			else: msgs.error(mr.errmsg)
+		else:
+			msgs.info("Reason for convergence:"+msgs.newline()+alutils.getreason(mr.status,verbose=slf._argflag['out']['verbose']),verbose=slf._argflag['out']['verbose'])
+		if mr.perror is None:
+			msgs.bug("Errors returned from perturbed fit is None",verbose=slf._argflag['out']['verbose'])
+			msgs.error("Cannot continue with the simulations")
+		# Get the results and print them to file
+		outpert = np.append(outpert, np.array([np.array(mr.params)]),axis=0)
+		alsave.save_model(slf, mr.params, mr.perror, [(tend - tstart)/3600.0, mr.fnorm, mr.dof, mr.niter, mr.status], printout=False, extratxt=[slf._argflag['sim']['dirname']+'/',".perturb"+ntxt])
+		# Plot the data (if requested)
+		if slf._argflag['plot']['fits']:
+			model = myfunct_wrap(mr.params,output=3,**fa)
+			alplot.make_plots_all(slf, model=model)
+			fileend=raw_input(msgs.input()+"Press enter to view the fits -")
+			alplot.plot_showall()
+	ntxt=":0"+nchr+"d}"
+	outname="{0:s}.{1:s}_{2"+ntxt+"-{3"+ntxt
+	msgs.info("Saving the results from the simulations",verbose=slf._argflag['out']['verbose'])
+	pertname=outname.format(slf._argflag['run']['modname'],'perturb',slf._argflag['sim']['startid'],slf._argflag['sim']['perturb']+slf._argflag['sim']['startid'])
+	np.savetxt(pertname,outpert)
+	return
+
+
 def sim_random(slf, covar, bparams, parinfo):
 	# Decide how many characters to use for output files
 	nchr = str(np.int(np.log10(slf._argflag['sim']['random']))+1)

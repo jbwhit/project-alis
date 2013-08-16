@@ -175,11 +175,11 @@ def load_settings(fname,verbose=2):
 		"""
 		Initialise the default settings called argflag
 		"""
-		rna = dict({'prognm':'alis.py', 'last_update':'Last updated 6th April 2013', 'atomic':'atomic.xml', 'modname':'model.mod', 'convergence':False, 'convnostop':False, 'convcriteria':0.2, 'limpar':False, 'ncpus':-1, 'ngpus':None, 'nsubpix':5, 'nsubmin':5, 'nsubmax':21, 'warn_subpix':100, 'renew_subpix':False, 'blind':True, 'bintype':'km/s', 'logn':True})
+		rna = dict({'prognm':'alis.py', 'last_update':'Last updated 6th April 2013', 'atomic':'atomic.xml', 'modname':'model.mod', 'convergence':False, 'convnostop':False, 'convcriteria':0.2, 'datatype':'default', 'limpar':False, 'ncpus':-1, 'ngpus':None, 'nsubpix':5, 'nsubmin':5, 'nsubmax':21, 'warn_subpix':100, 'renew_subpix':False, 'blind':True, 'bintype':'km/s', 'logn':True})
 		csa = dict({'miniter':0, 'maxiter':20000, 'xtol':1.0E-10, 'ftol':1.0E-10, 'gtol':1.0E-10, 'fstep':1.0})
 		pla = dict({'dims':'3x3', 'fits':True, 'xaxis':'observed', 'labels':False, 'only':False, 'pages':'all'})
 		opa = dict({'model':True, 'fits':False, 'onefits':False, 'overwrite':False, 'sm':False, 'verbose':2, 'reletter':False, 'covar':"", 'convtest':""})
-		mca = dict({'random':None, 'systematics':False, 'beginfrom':"", 'startid':0, 'systmodule':None, 'newstart':True, 'dirname':'sims', 'edgecut':4.0})
+		mca = dict({'random':None, 'perturb':None, 'systematics':False, 'beginfrom':"", 'startid':0, 'maxperturb':0.1, 'systmodule':None, 'newstart':True, 'dirname':'sims', 'edgecut':4.0})
 		gna = dict({'pixelsize':2.5, 'data':False, 'overwrite':False, 'peaksnr':0.0, 'skyfrac':0.0})
 		itr = dict({'model':None, 'data':None})
 		argflag = dict({'run':rna, 'chisq':csa, 'plot':pla, 'out':opa, 'sim':mca, 'generate':gna, 'iterate':itr})
@@ -232,6 +232,8 @@ def check_argflag(argflag, curcpu=None):
 		msgs.warn("Setting `convnostop' is True, but setting `convergence' is False."+msgs.newline()+"Not performing a convergence check",verbose=argflag['out']['verbose'])
 	if argflag['run']['convcriteria'] >= 1.0:
 		msgs.warn("Convergence criteria is greater than 1 standard deviation."+msgs.newline()+"Are you sure you want to do this?",verbose=argflag['out']['verbose'])
+	# Check maxperturb is positive
+	if argflag['sim']['maxperturb'] < 0.0: argflag['sim']['maxperturb'] *= -1.0
 	# If the user specified their own systematics module, try to import
 	# it here to make sure it exists and there are no mistakes.
 	if type(argflag['sim']['systmodule']) is str: argflag['sim']['systmodule'] = argflag['sim']['systmodule'].replace('.py','')
@@ -627,7 +629,7 @@ def load_data(slf, datlines, data=None):
 				wavein, fluxin, fluein, contin, zeroin, systin, fitrin = load_userdata(data, colspl, wfe, verbose=slf._argflag['out']['verbose'])
 			# Otherwise, load the data from a file
 			else:
-				wavein, fluxin, fluein, contin, zeroin, systin, fitrin = load_datafile(filename, colspl, wfe, verbose=slf._argflag['out']['verbose'])
+				wavein, fluxin, fluein, contin, zeroin, systin, fitrin = load_datafile(filename, colspl, wfe, verbose=slf._argflag['out']['verbose'], datatype=slf._argflag['run']['datatype'])
 		except:
 			msgs.error("Error reading in file -"+msgs.newline()+filename)
 		# Store the filename for later
@@ -665,6 +667,8 @@ def load_data(slf, datlines, data=None):
 			wvmnres, wvmxres = slf._funccall[fspl[0]].getminmax(slf._funcinst[fspl[0]], pars, [wavemin,wavemax])
 			w  = np.where((wavein >= wvmnres) & (wavein <= wvmxres))
 		if loadall: w = np.arange(wavein.size) # If this keyword was set, load all data from this file
+		if np.size(w) == 0:
+			msgs.error("No data was found within the fitrange limits for the file -"+msgs.newline()+filename)
 		datopt['nsubpix'][sind].append( nspix*get_binsize(wavein[w],bintype=bntyp,verbose=slf._argflag['out']['verbose']) )
 		posnfit[sind].append(wavemin)
 		posnfit[sind].append(wavemax)
@@ -745,13 +749,13 @@ def load_userdata(data, colspl, wfe, verbose=2):
 	return wavein, fluxin, fluein, contin, zeroin, systin, fitrin
 
 
-def load_datafile(filename, colspl, wfe, verbose=2):
+def load_datafile(filename, colspl, wfe, verbose=2, datatype="default"):
 	wfek = wfe.keys()
 	dattyp = filename.split(".")[-1]
 	if dattyp in ['dat', 'ascii', 'txt']:
 		return load_ascii(filename, colspl, wfe, wfek, verbose=verbose)
 	elif dattyp in ['fits','fit']:
-		return load_fits(filename, colspl, wfe, verbose=verbose)
+		return load_fits(filename, colspl, wfe, verbose=verbose, datatype=datatype)
 	else:
 		msgs.error("Sorry, I don't know how to read in ."+dattyp+" files.")
 	return
@@ -797,7 +801,7 @@ def load_ascii(filename, colspl, wfe, wfek, verbose=2):
 	return wavein, fluxin, fluein, contin, zeroin, systin, fitrin
 
 
-def load_fits(filename, colspl, wfe, verbose=2, ext=0):
+def load_fits(filename, colspl, wfe, verbose=2, ext=0, datatype='default'):
 	infile = pyfits.open(filename)
 	datain=infile[ext].data
 	foundtype=False
@@ -812,25 +816,48 @@ def load_fits(filename, colspl, wfe, verbose=2, ext=0):
 	except:
 		pass # This is not an ALIS fits file.
 	if not foundtype:
-		try:
-			# Load the wavelength scale
-			crvala=infile[0].header['crval1']
-			cdelta=infile[0].header['cdelt1']
-			crpixa=infile[0].header['crpix1']
-			cdelt_alta=infile[0].header['cd1_1']
-			if cdelta == 0.0: cdelta = cdelt_alta
-			pixscalea=infile[0].header['cdelt1']
-			wrng = np.arange(datain.shape[1])
-			wavein = 10.0**(((wrng - (crpixa - 1))*cdelta)+crvala)
-			fluxin, fluein = datain[wfe['flux'],:], datain[wfe['error'],:]
-			foundtype = True
-		except:
-			pass # This is not supported by the IRAF fits file format.
+		if datatype in ['default','UVESpopler']:
+			try:
+				#if wfe['wave'] != "-1": msgs.warn("You shouldn't need to specify the column of 'wave' for a"+msgs.newline()+"'default' fits file", verbose=verbose)
+				# Load the wavelength scale
+				crvala=infile[0].header['crval1']
+				cdelta=infile[0].header['cdelt1']
+				crpixa=infile[0].header['crpix1']
+				cdelt_alta=infile[0].header['cd1_1']
+				if cdelta == 0.0: cdelta = cdelt_alta
+				pixscalea=infile[0].header['cdelt1']
+				wrng = np.arange(datain.shape[1])
+				wavein = 10.0**(((wrng - (crpixa - 1))*cdelta)+crvala)
+				fluxin, fluein = datain[wfe['flux'],:], datain[wfe['error'],:]
+				foundtype = True
+			except:
+				pass
+		elif datatype == 'HIRESredux':
+			try:
+				#if wfe['wave'] != "-1": msgs.warn("You shouldn't need to specify the column of 'wave' for a"+msgs.newline()+"'HIRESredux' fits file", verbose=verbose)
+				# Load the wavelength scale
+				crvala=infile[0].header['crval1']
+				cdelta=infile[0].header['cdelt1']
+				pixscalea=infile[0].header['cdelt1']
+				wrng = np.arange(infile[0].header['naxis1'])
+				wavein = 10.0**((wrng*cdelta)+crvala)
+				fluxin = datain[:]
+				reduxfn = ".".join(filename.split(".")[:-1])[:-1]+"e." + filename.split(".")[-1]
+				intemp = pyfits.open(reduxfn)
+				derrin = intemp[ext].data
+				fluein = derrin[:]
+				foundtype = True
+			except:
+				pass
+		else:
+			pass
 	if not foundtype:
-		msgs.error("ALIS could not identify the type of fits file used")
+		msgs.info("An input fits file is not the default format", verbose=verbose)
+		msgs.error("Please specify the type of fits file with run+datatype")
 	# Read in the other columns of data
-	ncols = datain.shape[1]
-	if len(colspl) > ncols:
+	if datatype not in ["HIRESredux"]: ncols = datain.shape[1]
+	else: ncols = 1
+	if len(colspl) > ncols and datatype not in ["HIRESredux"]:
 		msgs.error("The following file -"+msgs.newline()+filename+msgs.newline()+"only has "+str(ncols)+" columns")
 	# Read in the continuum
 	if wfe['continuum'] != -1:
@@ -1073,6 +1100,7 @@ def load_onefits(slf,loadname):
 			modlines = ''.join(chr(int(i)) for i in tmodlines.split(","))
 		except:
 			msgs.error("The onefits file is corrupt")
+		slf._isonefits = True
 		return parlines.split("\n"), datlines.split("\n"), modlines.split("\n")
 	###########################
 	###  Extract the .mod file and the data
