@@ -8,7 +8,7 @@
  !  at 2012-11-21T00:20:59
  !-->
 <RESOURCE>
-<TABLE name="Atomic_Data_Table" nrows="664">
+<TABLE name="Atomic_Data_Table" nrows="659">
 <FIELD ID="MassNumber" datatype="int" name="MassNumber" ucd="AT_ELEMENT">
 <DESCRIPTION>Number of Nucleons</DESCRIPTION>
 <VALUES null='-2147483648'/>
@@ -1075,54 +1075,6 @@
     <TD>NaN</TD>
   </TR>
   <TR>
-    <TD>3</TD>
-    <TD>3.0160293191</TD>
-    <TD>0.0</TD>
-    <TD>He</TD>
-    <TD>I</TD>
-    <TD>584.36436</TD>
-    <TD>0.27625</TD>
-    <TD>2.0E8</TD>
-    <TD>NaN</TD>
-    <TD>NaN</TD>
-  </TR>
-  <TR>
-    <TD>3</TD>
-    <TD>3.0160293191</TD>
-    <TD>0.0</TD>
-    <TD>He</TD>
-    <TD>I</TD>
-    <TD>537.058103</TD>
-    <TD>0.073460</TD>
-    <TD>2.0E8</TD>
-    <TD>NaN</TD>
-    <TD>NaN</TD>
-  </TR>
-  <TR>
-    <TD>3</TD>
-    <TD>3.0160293191</TD>
-    <TD>0.0</TD>
-    <TD>He</TD>
-    <TD>I</TD>
-    <TD>522.240605</TD>
-    <TD>0.029873</TD>
-    <TD>2.0E8</TD>
-    <TD>NaN</TD>
-    <TD>NaN</TD>
-  </TR>
-  <TR>
-    <TD>3</TD>
-    <TD>3.0160293191</TD>
-    <TD>0.0</TD>
-    <TD>He</TD>
-    <TD>I</TD>
-    <TD>515.644042</TD>
-    <TD>0.015045</TD>
-    <TD>2.0E8</TD>
-    <TD>NaN</TD>
-    <TD>NaN</TD>
-  </TR>
-  <TR>
     <TD>4</TD>
     <TD>4.00260325415</TD>
     <TD>0.0</TD>
@@ -1167,18 +1119,6 @@
     <TD>515.6165</TD>
     <TD>0.015045</TD>
     <TD>2.0E8</TD>
-    <TD>NaN</TD>
-    <TD>NaN</TD>
-  </TR>
-  <TR>
-    <TD>3</TD>
-    <TD>3.0160293191</TD>
-    <TD>0.0</TD>
-    <TD>He</TD>
-    <TD>II</TD>
-    <TD>303.7958</TD>
-    <TD>0.416</TD>
-    <TD>6.27E8</TD>
     <TD>NaN</TD>
     <TD>NaN</TD>
   </TR>

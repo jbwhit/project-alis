@@ -6,6 +6,7 @@ run  bintype      km/s			# Set the type of pixels to use -- If pixels have const
 run  blind        True			# Run a blind analysis -- In order to print out the best-fitting model, this must be set to False.
 run  convcriteria 0.2           # Convergence criteria in units of the parameter error
 run  convnostop   False         # Continue to reduce the chi-squared stopping criteria until the parameters have converged
+run  datatype     default       # Specify the type of data being read in (the default is the IRAF standard)
 run  limpar       False         # If an initial parameter's value is outside the model limits, set the initial value to the limit. Otherwise, and error is raised.
 run  logn         True			# Use the log of the column density (True) or the column density (False)
 run  ncpus        -1			# Number of CPUs to use (-1 means all bar one CPU, -2 means all bar two CPUs)
@@ -38,6 +39,7 @@ out  overwrite    False			# Overwrite existing files when writing out?
 out  sm           False			# Generate a SuperMongo plotting script?
 out  verbose      2				# Level of screen output (0 is No screen output, 1 is low level output, 2 is output everything)
 # SIMULATE
+sim maxperturb    0.1           # Maximum level of perturbation allowed when generating new parameters (0.1 = 10 per cent of the parameter's value)
 sim beginfrom     ""            # An input .mod file that contains the starting parameters and errors for the simulations (Note: you will need to also output a covariance matrix)
 sim systmodule    None          # If the user writes their own module to deal with systematics, use this module
 sim newstart      True          # Generate a new set of starting parameters from the best-fitting covariance matrix

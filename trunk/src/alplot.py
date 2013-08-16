@@ -179,11 +179,17 @@ def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, labels=None, num
 		fig[pgnum].subplots_adjust(hspace=0.1, wspace=0.1, bottom=0.07, top=0.98, left=0.04, right=0.98)
 		for i in range(pgcnt[pg]):
 			w = np.where(wfemcarr[3][pg][i] > -0.5)
+			modl_min, modl_max = np.min(wfemcarr[3][pg][i][w]), np.max(wfemcarr[3][pg][i][w])
+			flue_med = 3.0*np.median(wfemcarr[2][pg][i])
+			res_size = 0.05*(modl_max-modl_min)
+			shift = np.min([modl_min-2.0*res_size, np.min(wfemcarr[5][pg][i])-np.max(wfemcarr[2][pg][i][w])-2.0*res_size])
 			if np.size(w[0]) == 0:
 				msgs.warn("There was no model data found for a panel", verbose=argflag['out']['verbose'])
 			ax = fig[pgnum].add_subplot(dims[0],dims[1],i+1)
 			# Plot the error spectrum
 			ax.fill_between(wfemcarr[0][pg][i],wfemcarr[5][pg][i]-wfemcarr[2][pg][i],wfemcarr[5][pg][i]+wfemcarr[2][pg][i],facecolor='0.7')
+			# Plot the residual region
+			ax.fill_between(wfemcarr[0][pg][i],shift+res_size,shift-res_size,facecolor='0.3')
 ##			ax.plot(wfemcarr[0][pg][i]+disp[pg][i],wfemcarr[2][pg][i], 'b-', drawstyle='steps')
 			# Plot the data
 			ax.plot(wfemcarr[0][pg][i]+disp[pg][i],wfemcarr[1][pg][i], 'k-', drawstyle='steps')
@@ -193,9 +199,9 @@ def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, labels=None, num
 				# Plot the continuum
 				ax.plot(wfemcarr[0][pg][i][w],wfemcarr[4][pg][i][w], 'b--')
 				# Plot the residuals
-				ax.plot(wfemcarr[0][pg][i][w]+disp[pg][i][w],wfemcarr[5][pg][i][w]+wfemcarr[1][pg][i][w]-wfemcarr[3][pg][i][w], 'b-', drawstyle='steps', alpha=0.5)
+				ax.plot(wfemcarr[0][pg][i][w]+disp[pg][i][w],(wfemcarr[5][pg][i][w]+wfemcarr[1][pg][i][w]-wfemcarr[3][pg][i][w])*res_size/wfemcarr[2][pg][i][w] + shift, 'b-', drawstyle='steps', alpha=0.5)
 				# Plot the zero level
-				ax.plot(wfemcarr[0][pg][i],wfemcarr[5][pg][i], 'g--')
+				ax.plot(wfemcarr[0][pg][i],wfemcarr[5][pg][i], 'g--')				
 #			if argx == 2: # For velocity:
 #				wmin=np.min([mmpltx[0],1.2*np.min(wfemcarr[0][pg][i][w])])
 #				wmax=np.max([mmpltx[1],1.2*np.max(wfemcarr[0][pg][i][w])])
@@ -231,12 +237,11 @@ def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, labels=None, num
 #			if argx == 2: ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%5.1f'))
 #			else: ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%6.2f'))
 			ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%6.2f'))
-			flue_med = 3.0*np.median(wfemcarr[2][pg][i])
-			modl_max = np.max(wfemcarr[4][pg][i])
 #			if argflag['plot']['labels']: ymax = np.max([1.0+2.0*flue_med, 2.0])
 #			else: ymax = np.max([1.0+2.0*flue_med, 1.2])
 			ymax = np.max([modl_max+flue_med, 1.2*np.max(wfemcarr[4][pg][i])])
-			ax.set_ylim(-flue_med,ymax)
+			ymin = shift - 2.0*res_size
+			ax.set_ylim(ymin,ymax)
 			#ax.set_yticks((0,0.5,1.0))
 			# Plot the label
 			if argflag['plot']['labels'] and labels is not None:

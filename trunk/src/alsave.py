@@ -111,9 +111,9 @@ def save_onefits(fname, slf):
 	# Setup the HDU
 	hdu = pyfits.PrimaryHDU()
 	# Get input model and place it in the fits header
-	plines = ''.join(slf._parlines)
-	dlines = ''.join(slf._datlines)
-	mlines = ''.join(slf._modlines)
+	plines = ''.join(slf._parlines).replace("\t","  ")
+	dlines = ''.join(slf._datlines).replace("\t","  ")
+	mlines = ''.join(slf._modlines).replace("\t","  ")
 	pcard=pyfits.Card('parlines',','.join([str(ord(c)) for c in plines]))
 	dcard=pyfits.Card('datlines',','.join([str(ord(c)) for c in dlines]))
 	mcard=pyfits.Card('modlines',','.join([str(ord(c)) for c in mlines]))
@@ -221,19 +221,22 @@ def save_modelfits(slf):
 	usdtwice, usdtwind, usdtwext = np.array([]), np.array([]).astype(np.int64), np.array([]).astype(np.str)
 	if slf._argflag['out']['onefits']: wvarr, fxarr, erarr, mdarr = [], [], [], []
 	# If we are generating fakedata, find the peak value of the model
-	if slf._argflag['generate']['data'] and (slf._argflag['generate']['peaksnr'] > 0.0 or slf._argflag['generate']['skyfrac'] > 0.0):
-		modmax = 0.0
+	if slf._argflag['generate']['data'] and slf._argflag['generate']['peaksnr'] > 0.0:
+		modmax = [0.0 for all in slf._specid]
 		for sp in range(len(slf._posnfull)):
 			for sn in range(len(slf._posnfull[sp])-1):
 				ll = slf._posnfull[sp][sn]
 				lu = slf._posnfull[sp][sn+1]
 				maxval = np.max(slf._modfinal[sp][ll:lu])
-				if maxval > modmax: modmax = maxval
+				if maxval > modmax[sp]: modmax[sp] = maxval
 		peakerr = 1.0/slf._argflag['generate']['peaksnr']
 		if peakerr**2 < slf._argflag['generate']['skyfrac']**2:
 			msgs.error("The following condition must hold for generated data:"+msgs.newline()+"skyfrac < 1/peaksnr")
-		objterr = modmax*np.sqrt(peakerr**2 - (slf._argflag['generate']['skyfrac'])**2)
-		objtsnr = modmax/objterr
+		objterr = [0.0 for all in slf._specid]
+		objtsnr = [0.0 for all in slf._specid]
+		for sp in range(len(slf._posnfull)):
+			objterr[sp] = modmax[sp]*np.sqrt(peakerr**2 - (slf._argflag['generate']['skyfrac'])**2)
+			objtsnr[sp] = modmax[sp]/objterr[sp]
 		slf._fluxfull = copy.deepcopy(slf._modfinal)
 	# Now iterate through the spectra and save the output
 	for sp in range(len(slf._posnfull)):
@@ -269,12 +272,12 @@ def save_modelfits(slf):
 			# Add noise if we are generating fakedata
 			if slf._argflag['generate']['data']:
 				if not os.path.exists(slf._snipnames[sp][sn]):
-					if slf._argflag['generate']['peaksnr'] > 0.0 or slf._argflag['generate']['skyfrac'] > 0.0:
-						slf._fluefull[sp][ll:lu] = np.sqrt((slf._modfinal[sp][ll:lu]/objtsnr)**2 + (modmax*slf._argflag['generate']['skyfrac'])**2)
+					if slf._argflag['generate']['peaksnr'] > 0.0:
+						slf._fluefull[sp][ll:lu] = np.sqrt((slf._modfinal[sp][ll:lu]/objtsnr[sp])**2 + (modmax[sp]*slf._argflag['generate']['skyfrac'])**2)
 						slf._fluxfull[sp][ll:lu] += np.random.normal(0.0, slf._fluefull[sp][ll:lu])
 				else:
 					if np.size(np.where(slf._fluefull[sp][ll:lu] <= 0.0)[0]) != 0:
-						if slf._argflag['generate']['peaksnr'] > 0.0 or slf._argflag['generate']['skyfrac'] > 0.0:
+						if slf._argflag['generate']['peaksnr'] > 0.0:
 							msgs.warn("Couldn't add noise to generated data -"+msgs.newline()+"the error array contains zero or negative values", verbose=slf._argflag['out']['verbose'])
 					else:
 						slf._fluxfull[sp][ll:lu] += np.random.normal(0.0, slf._fluefull[sp][ll:lu])
@@ -441,6 +444,7 @@ def save_model(slf,params,errors,info,printout=True,extratxt=["",""],filename=No
 	dstrarr = ["" for all in slf._datlines]
 	for sp in range(len(slf._specid)):
 		for i in range(len(slf._datlines)):
+			if slf._datlines[i].lstrip() == "": continue # This line is needed for OneFits.
 			if slf._datlines[i].lstrip()[0] == "#": dstrarr[i] += slf._datlines[i]
 			datspl = slf._datlines[i].split()
 			spmatch = False
