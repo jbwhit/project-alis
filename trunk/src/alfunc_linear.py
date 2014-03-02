@@ -82,7 +82,7 @@ class Linear(alfunc_base.Base) :
 		elif i == 1: pin = par
 		return pin
 
-	def set_vars(self, p, level, mp, ival, wvrng=[0.0,0.0], spid='None', levid=None, nexbin=None, getinfl=False):
+	def set_vars(self, p, level, mp, ival, wvrng=[0.0,0.0], spid='None', levid=None, nexbin=None, getinfl=False, ddpid=None):
 		"""
 		Return the parameters for a Gaussian function to be used by 'call'
 		The only thing that should be changed here is the parb values
@@ -91,13 +91,28 @@ class Linear(alfunc_base.Base) :
 		params=np.zeros(self._pnumr)
 		parinf=[]
 		for i in range(self._pnumr):
-			if mp['mtie'][ival][i] != -1:
+			lnkprm = None
+			if mp['mtie'][ival][i] >= 0:
 				getid = mp['tpar'][mp['mtie'][ival][i]][1]
+			elif mp['mtie'][ival][i] <= -2:
+				if len(mp['mlnk']) == 0:
+					lnkprm = mp['mpar'][ival][i]
+				else:
+					for j in range(len(mp['mlnk'])):
+						if mp['mlnk'][j][0] == mp['mtie'][ival][i]:
+							cmd = 'lnkprm = ' + mp['mlnk'][j][1]
+							exec(cmd)
+				levadd += 1
 			else:
 				getid = level+levadd
 				levadd+=1
-			params[i] = self.parin(i, p[getid])
-			if mp['mfix'][ival][i] == 0: parinf.append(getid)
+			if lnkprm is None:
+				params[i] = self.parin(i, p[getid])
+				if mp['mfix'][ival][i] == 0: parinf.append(getid)
+			else:
+				params[i] = lnkprm
+		if ddpid is not None:
+			if ddpid not in parinf: return []
 		if nexbin is not None:
 			if nexbin[0] == "km/s": return params, 1
 			elif nexbin[0] == "A" : return params, 1

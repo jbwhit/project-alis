@@ -278,7 +278,7 @@ class vSigma(alfunc_base.Base) :
 		if   i == 0: pin = par
 		return pin
 
-	def set_vars(self, p, level, mp, ival, wvrng=[0.0,0.0], spid='None', levid=None, nexbin=None, getinfl=False, getstdd=None):
+	def set_vars(self, p, level, mp, ival, wvrng=[0.0,0.0], spid='None', levid=None, nexbin=None, getinfl=False, ddpid=None, getstdd=None):
 		"""
 		Return the parameters for a Gaussian function to be used by 'call'
 		The only thing that should be changed here is the parb values
@@ -287,13 +287,28 @@ class vSigma(alfunc_base.Base) :
 		params=np.zeros(self._pnumr)
 		parinf=[]
 		for i in range(self._pnumr):
-			if mp['mtie'][ival][i] != -1:
+			lnkprm = None
+			if mp['mtie'][ival][i] >= 0:
 				getid = mp['tpar'][mp['mtie'][ival][i]][1]
+			elif mp['mtie'][ival][i] <= -2:
+				if len(mp['mlnk']) == 0:
+					lnkprm = mp['mpar'][ival][i]
+				else:
+					for j in range(len(mp['mlnk'])):
+						if mp['mlnk'][j][0] == mp['mtie'][ival][i]:
+							cmd = 'lnkprm = ' + mp['mlnk'][j][1]
+							exec(cmd)
+				levadd += 1
 			else:
 				getid = level+levadd
 				levadd+=1
-			params[i] = self.parin(i, p[getid])
-			if mp['mfix'][ival][i] == 0: parinf.append(level+levadd) # If parameter not fixed, append it to the influence array
+			if lnkprm is None:
+				params[i] = self.parin(i, p[getid])
+				if mp['mfix'][ival][i] == 0: parinf.append(level+levadd) # If parameter not fixed, append it to the influence array
+			else:
+				params[i] = lnkprm
+		if ddpid is not None:
+			if ddpid not in parinf: return []
 		if nexbin is not None:
 			if params[0] == 0: return params, 1
 			if nexbin[0] == "km/s": return params, int(round(nexbin[1]/params[0] + 0.5))

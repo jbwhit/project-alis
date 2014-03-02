@@ -418,7 +418,7 @@ class Polynomial(alfunc_base.Base) :
 				continue
 			elif mp['mkey'][istart]['input'][self._parid[0]] == 1: pretxt = ""   # Parameter is given as input, without parid
 			else: pretxt = self._parid[0]+"="                                    # Parameter is given as input, with parid
-			if mp['mtie'][istart][i] != -1:
+			if mp['mtie'][istart][i] >= 0:
 				if reletter:
 					newfmt=pretxt+self.gtoef(params[mp['tpar'][mp['mtie'][istart][i]][1]],self._svfmt[0]+'{1:c}')
 					outstring.append( (newfmt).format(params[mp['tpar'][mp['mtie'][istart][i]][1]],97+mp['mtie'][istart][i]-32*mp['mfix'][istart][1]) )
@@ -541,7 +541,7 @@ class Polynomial(alfunc_base.Base) :
 		else:
 			return retout, level
 
-	def set_pinfo(self, pinfo, level, mp, mnum):
+	def set_pinfo(self, pinfo, level, mp, lnk, mnum):
 		"""
 		Place limits on the functions parameters (as specified in init)
 		Nothing should be changed here.
@@ -550,15 +550,40 @@ class Polynomial(alfunc_base.Base) :
 		add = pnumr
 		levadd = 0
 		for i in range(pnumr):
-			if mp['mtie'][mnum][i] != -1: add -= 1
+			# First Check if there are any operations/links to perform on this parameter
+			if len(lnk['opA']) != 0:
+				breakit=False
+				for j in range(len(mp['tpar'])):
+					if breakit: break
+					if mp['tpar'][j][1] == level+levadd: # then this is a tied parameter
+						# Check if this tied parameter is to be linked to another parameter
+						for k in range(len(lnk['opA'])):
+							if mp['tpar'][j][0] == lnk['opA'][k]:
+								ttext = lnk['exp'][k]
+								for l in lnk['opB'][k]:
+									for m in range(len(mp['tpar'])):
+										if mp['tpar'][m][0] == l:
+											pn = mp['tpar'][m][1]
+											break
+									ttext = ttext.replace(l,'p[{0:d}]'.format(pn))
+								pinfo[level+levadd]['tied'] = ttext
+								breakit = True
+								break
+			# Now set limits and fixed values
+			if mp['mtie'][mnum][i] >= 0: add -= 1
+			elif mp['mtie'][mnum][i] <= -2:
+				pinfo[level+levadd]['limited'] = [0 if j is None else 1 for j in mp['mlim'][mnum][i]]
+				pinfo[level+levadd]['limits']  = [0.0 if j is None else np.float64(j) for j in mp['mlim'][mnum][i]]
+				mp['mfix'][mnum][i] = -1
+				levadd += 1
 			else:
 				pinfo[level+levadd]['limited'] = [0 if j is None else 1 for j in mp['mlim'][mnum][i]]
-				pinfo[level+levadd]['limits']  = [0.0 if j is None else float(j) for j in mp['mlim'][mnum][i]]
+				pinfo[level+levadd]['limits']  = [0.0 if j is None else np.float64(j) for j in mp['mlim'][mnum][i]]
 				pinfo[level+levadd]['fixed']   = mp['mfix'][mnum][i]
 				levadd += 1
 		return pinfo, add
-
-	def set_vars(self, p, level, mp, ival, wvrng=[0.0,0.0], spid='None', levid=None, nexbin=None, getinfl=False):
+            
+	def set_vars(self, p, level, mp, ival, wvrng=[0.0,0.0], spid='None', levid=None, nexbin=None, ddpid=None, getinfl=False):
 		"""
 		Return the parameters for a Polynomial function to be used by 'call'
 		The only thing that should be changed here is the parb values
@@ -568,14 +593,29 @@ class Polynomial(alfunc_base.Base) :
 		params=np.zeros(pnumr)
 		parinf=[]
 		for i in range(pnumr):
+			lnkprm = None
 			parb = dict({'ap_1a':self._keywd['scale']})
-			if mp['mtie'][ival][i] != -1:
+			if mp['mtie'][ival][i] >= 0:
 				getid = mp['tpar'][mp['mtie'][ival][i]][1]
+			elif mp['mtie'][ival][i] <= -2:
+				if len(mp['mlnk']) == 0:
+					lnkprm = mp['mpar'][ival][i]
+				else:
+					for j in range(len(mp['mlnk'])):
+						if mp['mlnk'][j][0] == mp['mtie'][ival][i]:
+							cmd = 'lnkprm = ' + mp['mlnk'][j][1]
+							exec(cmd)
+				levadd += 1
 			else:
 				getid = level+levadd
 				levadd+=1
-			params[i] = self.parin(i, p[getid], parb)
-			if mp['mfix'][ival][i] == 0: parinf.append(getid)
+			if lnkprm is None:
+				params[i] = self.parin(i, p[getid], parb)
+				if mp['mfix'][ival][i] == 0: parinf.append(getid)
+			else:
+				params[i] = lnkprm
+		if ddpid is not None:
+			if ddpid not in parinf: return []
 		if nexbin is not None:
 			if nexbin[0] == "km/s": return params, 1
 			elif nexbin[0] == "A" : return params, 1

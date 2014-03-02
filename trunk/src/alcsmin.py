@@ -71,7 +71,7 @@ class alfit(object):
 
 
 	def __init__(self, fcn, xall=None, functkw={}, parinfo=None,
-				 ftol=1.e-10, xtol=1.e-10, gtol=1.e-10,
+				 ftol=1.e-10, xtol=1.e-10, gtol=1.e-10, atol=1.e-10,
 				 damp=0., miniter=0, maxiter=200, factor=100., nprint=1,
 				 iterfunct='default', iterkw={}, nocovar=0, limpar=False,
 				 rescale=0, autoderivative=1, verbose=2, modpass=None, 
@@ -265,6 +265,8 @@ class alfit(object):
 
 		8  gtol is too small. fvec is orthogonal to the columns of the jacobian
 		   to machine precision.
+
+		9  The absolute difference in the chi-squared between successive iterations is less than atol
 
 	 .fnorm
 		The value of the summed squared residuals for the returned parameter
@@ -486,7 +488,7 @@ class alfit(object):
 				return
 			self.errmsg = ''
 
-		[self.status, fvec] = self.call(fcn, self.params, functkw)
+		[self.status, fvec, emab] = self.call(fcn, self.params, functkw, getemab=True)
 		
 		if self.status < 0:
 			self.errmsg = 'first call to "'+str(fcn)+'" failed'
@@ -558,7 +560,7 @@ class alfit(object):
 			self.status = 2
 			catch_msg = 'calling ALFIT_FDJAC2'
 			fjac = self.fdjac2(fcn, x, fvec, step, qulim, ulim, dside,
-						  epsfcn=epsfcn,
+						  epsfcn=epsfcn, emab=emab,
 						  autoderivative=autoderivative, dstep=dstep,
 						  functkw=functkw, ifree=ifree, xall=self.params)
 			if fjac is None:
@@ -726,6 +728,78 @@ class alfit(object):
 					wh = (numpy.nonzero((qllim!=0.) & (wa2 <= llim1)))[0]					
 					if len(wh) > 0:
 						wa2[wh] = llim[wh]
+
+					# Make smaller steps if any tied parameters go out of limits.
+					if self.qanytied:
+						arrom = numpy.append(0.0,10.0**numpy.arange(-16.0,1.0)[::-1])
+						xcopy = self.params.copy()
+						xcopy[ifree] = wa2.copy()
+						watemp = numpy.zeros(npar)
+						watemp[ifree] = wa1.copy()
+						for pqt in range(npar):
+							if self.ptied[pqt] == '': continue
+							cmd = "parval = "+parinfo[pqt]['tied'].replace("p[","xcopy[")
+							exec(cmd)
+							# Check if this parameter is lower than the enforced limit
+							if parinfo[pqt]['limited'][0] == 1:
+								if parval < parinfo[pqt]['limits'][0]:
+									madetlim = False
+									for nts in range(1,arrom.size):
+										xcopyB = self.params.copy()
+										xcopyB[ifree] = x + arrom[nts]*wa1
+										cmd = "tmpval = "+parinfo[pqt]['tied'].replace("p[","xcopyB[")
+										exec(cmd)
+										if tmpval > parinfo[pqt]['limits'][0]: # Then we shouldn't scale the parameters by more than arrom[nts]
+											arromB = numpy.linspace(arrom[nts],arrom[nts-1],91)[::-1]
+											xcopyB[ifree] -= arrom[nts]*wa1
+											for ntsB in range(1,arromB.size):
+												xcopyB[ifree] = x + arromB[ntsB]*wa1
+												cmd = "tmpval = "+parinfo[pqt]['tied'].replace("p[","xcopyB[")
+												exec(cmd)
+												if tmpval > parinfo[pqt]['limits'][0]:
+													# Find the parameters used in this linking, and scale there wa1 values appropriately
+													strspl = (" "+parinfo[pqt]['tied']).split("p[")
+													for ssp in range(1,len(strspl)):
+														watemp[int(strspl[ssp].split("]")[0])] *= arromB[ntsB]
+													madetlim = True
+												if madetlim: break
+												xcopyB[ifree] -= arromB[ntsB]*wa1
+										if madetlim: break
+									if not madetlim:
+										strspl = (" "+parinfo[pqt]['tied']).split("p[")
+										for ssp in range(1,len(strspl)):
+											watemp[int(strspl[ssp].split("]")[0])] *= 0.0
+							# Check if this parameter is higher than the enforced limit
+							elif parinfo[pqt]['limited'][1] == 1:
+								if parval > parinfo[pqt]['limits'][1]:
+									madetlim = False
+									for nts in range(1,arrom.size):
+										xcopyB = self.params.copy()
+										xcopyB[ifree] = x + arrom[nts]*wa1*alpha
+										cmd = "tmpval = "+parinfo[pqt]['tied'].replace("p[","xcopyB[")
+										exec(cmd)
+										if tmpval < parinfo[pqt]['limits'][1]: # Then we shouldn't scale the parameters by more than arrom[nts]
+											arromB = numpy.linspace(arrom[nts],arrom[nts-1],91)[::-1]
+											xcopyB[ifree] -= arrom[nts]*wa1*alpha
+											for ntsB in range(1,arromB.size):
+												xcopyB[ifree] = x + arromB[ntsB]*wa1*alpha
+												cmd = "tmpval = "+parinfo[pqt]['tied'].replace("p[","xcopyB[")
+												exec(cmd)
+												if tmpval < parinfo[pqt]['limits'][1]:
+													# Find the parameters used in this linking, and scale there wa1 values appropriately
+													strspl = (" "+parinfo[pqt]['tied']).split("p[")
+													for ssp in range(1,len(strspl)):
+														watemp[int(strspl[ssp].split("]")[0])] *= arromB[ntsB]
+													madetlim = True
+												if madetlim: break
+										if madetlim: break
+									if not madetlim:
+										strspl = (" "+parinfo[pqt]['tied']).split("p[")
+										for ssp in range(1,len(strspl)):
+											watemp[int(strspl[ssp].split("]")[0])] *= 0.0
+						wa2 = wa2 + watemp[ifree] - wa1
+						del xcopy, watemp, arrom
+
 				# endelse
 				wa3 = diag * wa1
 				pnorm = self.enorm(wa3)
@@ -739,7 +813,8 @@ class alfit(object):
 				# Evaluate the function at x+p and calculate its norm
 				mperr = 0
 				catch_msg = 'calling '+str(fcn)
-				[self.status, wa4] = self.call(fcn, self.params, functkw)
+				[self.status, wa4, emab] = self.call(fcn, self.params, functkw, getemab=True)
+				#[self.status, wa4] = self.call(fcn, self.params, functkw)
 				if self.status < 0:
 					self.errmsg = 'WARNING: premature termination by "'+fcn+'"'
 					return
@@ -784,6 +859,9 @@ class alfit(object):
 						delta = pnorm/0.5
 						par = 0.5*par
 
+				# Get the absolute reduction
+				absred = self.fnorm**2 - fnorm1**2
+
 				# Test for successful iteration
 				if ratio >= 0.0001:
 					# Successful iteration.  Update x, fvec, and their norms
@@ -806,6 +884,10 @@ class alfit(object):
 					if (numpy.abs(actred) <= ftol) and (prered <= ftol) \
 						 and (0.5 * ratio <= 1) and (self.status == 2):
 						 self.status = 3
+				if atol != 0.0 and atol/fnorm1**2 > machep and ratio >= 0.0001:
+					if absred < atol:
+						self.status = 9
+
 				# If we haven't undertaken the minimum number of interations, then keep going.
 				if self.niter < miniter and (self.status in [1,2,3]):
 					self.status = 0
@@ -974,22 +1056,23 @@ class alfit(object):
 	
 	# Call user function or procedure, with _EXTRA or not, with
 	# derivatives or not.
-	def call(self, fcn, x, functkw, fjac=None, ddpid=None):
+	def call(self, fcn, x, functkw, fjac=None, ddpid=None, pp=None, emab=None, getemab=False):
 		if self.debug:
 			print 'Entering call...'
 		if self.qanytied:
 			x = self.tie(x, self.ptied)
 		self.nfev = self.nfev + 1
 		if fjac is None:
-			[status, f] = fcn(x, fjac=fjac, ddpid=ddpid, **functkw)
 			if self.damp > 0:
 				# Apply the damping if requested.  This replaces the residuals
 				# with their hyperbolic tangent.  Thus residuals larger than
 				# DAMP are essentially clipped.
+				[status, f] = fcn(x, fjac=fjac, ddpid=ddpid, pp=pp, emab=emab, getemab=getemab, **functkw)
 				f = numpy.tanh(f/self.damp)
-			return [status, f]
+				return [status, f]
+			return fcn(x, fjac=fjac, ddpid=ddpid, pp=pp, emab=emab, getemab=getemab, **functkw)
 		else:
-			return fcn(x, fjac=fjac, ddpid=ddpid, **functkw)
+			return fcn(x, fjac=fjac, ddpid=ddpid, pp=pp, emab=emab, getemab=getemab, **functkw)
 	
 	
 	def enorm(self, vec):
@@ -997,24 +1080,26 @@ class alfit(object):
 		ans = numpy.sqrt(numpy.dot(vec.T, vec))
 		return ans
 	
-	def funcderiv(self, fcn, fvec, functkw, j, xp, xm, hj):
-		[status, fp] = self.call(fcn, xp, functkw, ddpid=j)
+	def funcderiv(self, fcn, fvec, functkw, j, xp, ifree, hj, emab, oneside):
+		pp = xp.copy()
+		pp[ifree] += hj
+		[status, fp] = self.call(fcn, xp, functkw, ddpid=j, pp=pp, emab=emab)
 		if status < 0:
 			return None
-		if xm is None:
+		if oneside:
 			# COMPUTE THE ONE-SIDED DERIVATIVE
 			fjac = (fp-fvec)/hj
 		else:
 			# COMPUTE THE TWO-SIDED DERIVATIVE
-			#mperr = 0
-			[status, fm] = self.call(fcn, xm, functkw, ddpid=j)
+			pp[ifree] -= 2.0*hj # There's a 2.0 here because hj was recently added to pp (see second line of funcderiv)
+			[status, fm] = self.call(fcn, xp, functkw, ddpid=j, pp=pp, emab=emab)
 			if status < 0:
 				return None
 			fjac = (fp-fm)/(2.0*hj)
 		return [j,fjac]
 	
 	def fdjac2(self, fcn, x, fvec, step=None, ulimited=None, ulimit=None, dside=None,
-			   epsfcn=None, autoderivative=1,
+			   epsfcn=None, emab=None, autoderivative=1,
 			   functkw=None, xall=None, ifree=None, dstep=None):
 
 		if self.debug:
@@ -1092,31 +1177,44 @@ class alfit(object):
 			wh = (numpy.nonzero(mask))[0]
 			if len(wh) > 0:
 				h[wh] = - h[wh]
+
 		# Loop through parameters, computing the derivative for each
 		pool = mpPool(processes=self.ncpus)
 		async_results = []
-		mydict = self.__dict__.copy()
-#		mydict['blas_enorm'] = None  # Can't pass a fortran object through Pool.
 		for j in range(n):
-			xp = xall.copy()
-			xp[ifree[j]] += h[j]
 			if numpy.abs(dside[ifree[j]]) <= 1:
 				# COMPUTE THE ONE-SIDED DERIVATIVE
-				async_results.append(pool.apply_async(self.funcderiv, (fcn,fvec,functkw,j,xp,None,h[j])))
+				async_results.append(pool.apply_async(self.funcderiv, (fcn,fvec,functkw,j,xall,ifree[j],h[j],emab,True)))
 			else:
 				# COMPUTE THE TWO-SIDED DERIVATIVE
-				xm = xall.copy()
-				xm[ifree[j]] -= h[j]
-				async_results.append(pool.apply_async(self.funcderiv, (fcn,fvec,functkw,j,xp,xm,h[j])))
+				async_results.append(pool.apply_async(self.funcderiv, (fcn,fvec,functkw,j,xall,ifree[j],h[j],emab,False)))
 		pool.close()
 		pool.join()
 		map(ApplyResult.wait, async_results)
 		for j in range(n):
 			getVal = async_results[j].get()
 			if getVal == None: return None
-			# Note optimization fjac(0:*,j)
 			fjac[0:,getVal[0]] = getVal[1]
 		return fjac
+
+#
+#       The following code is for the not multi-processing
+#
+#		# Loop through parameters, computing the derivative for each
+#		async_results = []
+#		for j in range(n):
+#			if numpy.abs(dside[ifree[j]]) <= 1:
+#				# COMPUTE THE ONE-SIDED DERIVATIVE
+#				async_results.append(self.funcderiv(fcn,fvec,functkw,j,xall,ifree[j],h[j],emab,True))
+#			else:
+#				# COMPUTE THE TWO-SIDED DERIVATIVE
+#				async_results.append(self.funcderiv(fcn,fvec,functkw,j,xall,ifree[j],h[j],emab,False))
+#		for j in range(n):
+#			getVal = async_results[j]
+#			if getVal == None: return None
+#			# Note optimization fjac(0:*,j)
+#			fjac[0:,getVal[0]] = getVal[1]
+#		return fjac
 
 
 

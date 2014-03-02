@@ -14,6 +14,7 @@ def getreason(idnum,verbose=2):
 	elif idnum == 6: return "ftol is too small. No further reduction in the sum of squares is possible"
 	elif idnum == 7: return "xtol is too small. No further improvement in the approximate solution x is possible"
 	elif idnum == 8: return "gtol is too small. fvec is orthogonal to the columns of the jacobian to machine precision"
+	elif idnum == 9: return "The relative reduction in the sum of squares is less than atol"
 	else:
 		msgs.bug("Convergence reason is unknown (probably failed) --- please contact the author",verbose=verbose)
 		return "Convergence reason is unknown (probably failed) --- please contact the author"

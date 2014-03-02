@@ -185,6 +185,7 @@ class Voigt(alfunc_base.Base) :
 			# We now need to break each pixel up into smaller units to
 			# calculate the effective absorption in a given pixel. Let's
 			# sample each pixel by nexpd bins per Doppler parameter.
+			# This is only valid if the pixelsize is in km/s
 			if karr['logN']: cold = 10.0**par[0]
 			else: cold = par[0]
 			zp1=par[1]+1.0
@@ -405,7 +406,7 @@ class Voigt(alfunc_base.Base) :
 			msgs.error("Function "+self._idstr+" is badly defined in definition parin.")
 		return pin
 
-	def set_vars(self, p, level, mp, ival, wvrng=[0.0,0.0], spid='None', levid=None, nexbin=None, getinfl=False):
+	def set_vars(self, p, level, mp, ival, wvrng=[0.0,0.0], spid='None', levid=None, nexbin=None, ddpid=None, getinfl=False):
 		"""
 		Return the parameters for a Gaussian function to be used by 'call'
 		The only thing that should be changed here is the parb values
@@ -425,14 +426,29 @@ class Voigt(alfunc_base.Base) :
 			m = np.where(self._atomic['Element'] == self._keywd['ion'].split('_')[0])
 			if np.size(m) != 1: msgs.error("Element {0:s} not found in atomic data file".format(self._keywd['ion'].split('_')[0]))
 			for i in range(self._pnumr):
+				lnkprm = None
 				parb = dict({'ap_1a':[None], 'ap_2a':pt[2], 'ap_2b':self._atomic['AtomicMass'][m][0]})
-				if mp['mtie'][ival][i] != -1:
+				if mp['mtie'][ival][i] >= 0:
 					getid = mp['tpar'][mp['mtie'][ival][i]][1]
+				elif mp['mtie'][ival][i] <= -2:
+					if len(mp['mlnk']) == 0:
+						lnkprm = mp['mpar'][ival][i]
+					else:
+						for j in range(len(mp['mlnk'])):
+							if mp['mlnk'][j][0] == mp['mtie'][ival][i]:
+								cmd = 'lnkprm = ' + mp['mlnk'][j][1]
+								exec(cmd)
+					levadd += 1
 				else:
 					getid = level+levadd
 					levadd+=1
-				pt[i] = self.parin(i, p[getid], parb)
-				if mp['mfix'][ival][i] == 0: parinf.append(getid)
+				if lnkprm is None:
+					pt[i] = self.parin(i, p[getid], parb)
+					if mp['mfix'][ival][i] == 0: parinf.append(getid)
+				else:
+					pt[i] = lnkprm
+			if ddpid is not None:
+				if ddpid not in parinf: return []
 			nv = np.where(self._atomic['Ion'] == self._keywd['ion'])[0]
 			nw = np.where( (self._atomic['Wavelength'][nv]*(1.0+pt[1]) >= wvrng[0]) & (self._atomic['Wavelength'][nv]*(1.0+pt[1]) <= wvrng[1]) )
 			if self._atomic['Wavelength'][nv][nw].size == 0:
@@ -452,6 +468,7 @@ class Voigt(alfunc_base.Base) :
 			pt=[]
 			tsize = 0
 			for i in range(len(mp['mkey'])):
+				lnkprm = None
 				if mp['mtyp'][i] != self._idstr: continue   # Not a Voigt profile
 				if mp['mkey'][i]['ion'] != denrat: continue # Not denrat
 				if spid not in mp['mkey'][i]['specid']: continue # Not a common specid
@@ -460,36 +477,55 @@ class Voigt(alfunc_base.Base) :
 				dln = mp['mkey'][i]['logN']
 				# Get the value of the column density ratio
 				pt.append(np.zeros(self._pnumr))
-				if mp['mtie'][ival][0] != -1:
+				if mp['mtie'][ival][0] >= 0:
 					getid = mp['tpar'][mp['mtie'][ival][0]][1]
+				elif mp['mtie'][ival][0] <= -2:
+					if len(mp['mlnk']) == 0:
+						lnkprm = mp['mpar'][ival][0]
+					else:
+						for j in range(len(mp['mlnk'])):
+							if mp['mlnk'][j][0] == mp['mtie'][ival][0]:
+								cmd = 'lnkprm = ' + mp['mlnk'][j][1]
+								exec(cmd)
 				else:
 					getid = level
-				pt[-1][0] = p[getid]
-				if mp['mfix'][ival][0] == 0: parinf.append(getid)
+				if lnkprm is None:
+					pt[-1][0] = p[getid]
+					if mp['mfix'][ival][0] == 0: parinf.append(getid)
+				else:
+					pt[-1][0] = lnkprm
 				# Get the parameters from the matching denrat and combine these with the appropriate parameters for numrat
 				levadd=0
-#				levaddi=0
 				for j in range(self._pnumr):
+					lnkprm = None
 					parb = dict({'ap_1a':[pt[-1][0],nln,dln], 'ap_2a':pt[-1][2], 'ap_2b':elmass})
-					if mp['mtie'][i][j] != -1:
+					if mp['mtie'][i][j] >= 0:
 						getid = mp['tpar'][mp['mtie'][i][j]][1]
 						getpr = p[getid]
 					elif mp['mtie'][i][j] == -1 and mp['mfix'][i][j] == 1:
 						getid = None
 						getpr = mp['mpar'][i][j]
 						levadd+=1
+					elif mp['mtie'][i][j] <= -2:
+						if len(mp['mlnk']) == 0:
+							lnkprm = mp['mpar'][i][j]
+						else:
+							for k in range(len(mp['mlnk'])):
+								if mp['mlnk'][k][0] == mp['mtie'][i][j]:
+									cmd = 'lnkprm = ' + mp['mlnk'][k][1]
+									exec(cmd)
+						levadd += 1
 					else:
 						getid = levid[i]+levadd
 						getpr = p[getid]
 						levadd+=1
-					pt[-1][j] = self.parin(j, getpr, parb)
-					if mp['mfix'][i][j] == 0: parinf.append(getid)
-#				else:
-#					if mp['mtie'][ival][j-3] != -1:
-#						pt[-1][j] = self.parin(j, p[mp['tpar'][mp['mtie'][ival][j-3]][1]], parb)
-#					else:
-#						pt[-1][j] = self.parin(j, p[level+levaddi], parb)
-#						levaddi+=1
+					if lnkprm is None:
+						pt[-1][j] = self.parin(j, getpr, parb)
+						if mp['mfix'][i][j] == 0: parinf.append(getid)
+					else:
+						pt[-1][j] = lnkprm
+				if ddpid is not None:
+					if ddpid not in parinf: continue
 				nv = np.where(self._atomic['Ion'] == numrat)[0]
 				nw = np.where( (self._atomic['Wavelength'][nv]*(1.0+pt[-1][1]) >= wvrng[0]) & (self._atomic['Wavelength'][nv]*(1.0+pt[-1][1]) <= wvrng[1]) )
 				paramst = np.zeros((self._atomic['Wavelength'][nv][nw].size,6))
@@ -555,7 +591,7 @@ class Voigt(alfunc_base.Base) :
 				continue
 			elif mp['mkey'][istart]['input'][self._parid[i]] == 1: pretxt = ""   # Parameter is given as input, without parid
 			else: pretxt = self._parid[i]+"="                                    # Parameter is given as input, with parid
-			if mp['mtie'][istart][i] != -1:
+			if mp['mtie'][istart][i] >= 0:
 				if reletter:
 					newfmt=pretxt+self.gtoef(params[mp['tpar'][mp['mtie'][istart][i]][1]],self._svfmt[parid[i]]+'{1:c}')
 					outstring.append( (newfmt).format(params[mp['tpar'][mp['mtie'][istart][i]][1]],97+mp['mtie'][istart][i]-32*mp['mfix'][istart][1]) )
@@ -668,7 +704,7 @@ class Voigt(alfunc_base.Base) :
 		else:
 			return retout, level
 
-	def set_pinfo(self, pinfo, level, mp, mnum):
+	def set_pinfo(self, pinfo, level, mp, lnk, mnum):
 		"""
 		Place limits on the functions parameters (as specified in init)
 		Nothing should be changed here.
@@ -676,7 +712,32 @@ class Voigt(alfunc_base.Base) :
 		add = len(mp['mpar'][mnum])
 		levadd = 0
 		for i in range(len(mp['mpar'][mnum])):
-			if mp['mtie'][mnum][i] != -1: add -= 1
+			# First Check if there are any operations/links to perform on this parameter
+			if len(lnk['opA']) != 0:
+				breakit=False
+				for j in range(len(mp['tpar'])):
+					if breakit: break
+					if mp['tpar'][j][1] == level+levadd: # then this is a tied parameter
+						# Check if this tied parameter is to be linked to another parameter
+						for k in range(len(lnk['opA'])):
+							if mp['tpar'][j][0] == lnk['opA'][k]:
+								ttext = lnk['exp'][k]
+								for l in lnk['opB'][k]:
+									for m in range(len(mp['tpar'])):
+										if mp['tpar'][m][0] == l:
+											pn = mp['tpar'][m][1]
+											break
+									ttext = ttext.replace(l,'p[{0:d}]'.format(pn))
+								pinfo[level+levadd]['tied'] = ttext
+								breakit = True
+								break
+#			# Now set limits and fixed values
+			if mp['mtie'][mnum][i] >= 0: add -= 1
+			elif mp['mtie'][mnum][i] <= -2:
+				pinfo[level+levadd]['limited'] = [0 if j is None else 1 for j in mp['mlim'][mnum][i]]
+				pinfo[level+levadd]['limits']  = [0.0 if j is None else np.float64(j) for j in mp['mlim'][mnum][i]]
+				mp['mfix'][mnum][i] = -1
+				levadd += 1
 			else:
 				pinfo[level+levadd]['limited'] = [0 if j is None else 1 for j in mp['mlim'][mnum][i]]
 				pinfo[level+levadd]['limits']  = [0.0 if j is None else np.float64(j) for j in mp['mlim'][mnum][i]]
