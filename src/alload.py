@@ -175,8 +175,8 @@ def load_settings(fname,verbose=2):
 		"""
 		Initialise the default settings called argflag
 		"""
-		rna = dict({'prognm':'alis.py', 'last_update':'Last updated 6th April 2013', 'atomic':'atomic.xml', 'modname':'model.mod', 'convergence':False, 'convnostop':False, 'convcriteria':0.2, 'datatype':'default', 'limpar':False, 'ncpus':-1, 'ngpus':None, 'nsubpix':5, 'nsubmin':5, 'nsubmax':21, 'warn_subpix':100, 'renew_subpix':False, 'blind':True, 'bintype':'km/s', 'logn':True})
-		csa = dict({'miniter':0, 'maxiter':20000, 'xtol':1.0E-10, 'ftol':1.0E-10, 'gtol':1.0E-10, 'fstep':1.0})
+		rna = dict({'prognm':'alis.py', 'last_update':'Last updated 12th September 2013', 'atomic':'atomic.xml', 'modname':'model.mod', 'convergence':False, 'convnostop':False, 'convcriteria':0.2, 'datatype':'default', 'limpar':False, 'ncpus':-1, 'ngpus':None, 'nsubpix':5, 'nsubmin':5, 'nsubmax':21, 'warn_subpix':100, 'renew_subpix':False, 'blind':True, 'bintype':'km/s', 'logn':True, 'capvalue':None})
+		csa = dict({'miniter':0, 'maxiter':20000, 'atol':1.0E-10, 'xtol':1.0E-10, 'ftol':1.0E-10, 'gtol':1.0E-10, 'fstep':1.0})
 		pla = dict({'dims':'3x3', 'fits':True, 'xaxis':'observed', 'labels':False, 'only':False, 'pages':'all'})
 		opa = dict({'model':True, 'fits':False, 'onefits':False, 'overwrite':False, 'sm':False, 'verbose':2, 'reletter':False, 'covar':"", 'convtest':""})
 		mca = dict({'random':None, 'perturb':None, 'systematics':False, 'beginfrom':"", 'startid':0, 'maxperturb':0.1, 'systmodule':None, 'newstart':True, 'dirname':'sims', 'edgecut':4.0})
@@ -262,14 +262,14 @@ def load_input(slf, filename=None, textstr=None, updateself=True):
 			loadname = filename
 		if loadname.split(".")[-1] == "fits":
 			# This could be an ALIS onefits file.
-			parlines, datlines, modlines = load_onefits(slf,loadname)
+			parlines, datlines, modlines, lnklines = load_onefits(slf,loadname)
 			argflag = set_params(parlines, copy.deepcopy(slf._argflag), setstr="OneFits ")
 			# Check the settings are OK.
 			check_argflag(argflag, curcpu=slf._argflag['run']['ncpus'])
 			msgs.info("Input file loaded successfully",verbose=slf._argflag['out']['verbose'])
 			if updateself:
 				slf._argflag = argflag
-			return parlines, datlines, modlines
+			return parlines, datlines, modlines, lnklines
 		try:
 			infile = open(loadname, 'r')
 		except IOError:
@@ -280,7 +280,8 @@ def load_input(slf, filename=None, textstr=None, updateself=True):
 	parlines = []
 	datlines = []
 	modlines = []
-	rddata, rdmodl = 0, 0
+	lnklines = []
+	rddata, rdmodl, rdlink = 0, 0, 0
 	ignlin = -1
 	for i in range(len(lines)):
 		goodtxt = lines[i].strip().split('#')[0]
@@ -323,6 +324,15 @@ def load_input(slf, filename=None, textstr=None, updateself=True):
 		elif rdmodl == 0 and linspl[0] == 'model' and linspl[1] == 'read':
 			rdmodl += 1
 			continue
+		if rdlink == 1:
+			if linspl[0] == 'link' and linspl[1] == 'end':
+				rdlink += 1
+				continue
+			lnklines.append(lines[i])
+			continue
+		elif rdlink == 0 and linspl[0] == 'link' and linspl[1] == 'read':
+			rdlink += 1
+			continue
 		if lines[i].lstrip()[0] == '#': continue
 		parlines.append(lines[i])
 	# Do some quick checks
@@ -341,7 +351,7 @@ def load_input(slf, filename=None, textstr=None, updateself=True):
 	msgs.info("Input file loaded successfully",verbose=slf._argflag['out']['verbose'])
 	if updateself:
 		slf._argflag = argflag
-	return parlines, datlines, modlines
+	return parlines, datlines, modlines, lnklines
 
 def load_atomic(slf):
 	"""
@@ -536,6 +546,7 @@ def load_data(slf, datlines, data=None):
 		uselabel  = ''
 		specidtxt = ''
 		fitrtxt   = ''
+		wavemin, wavemax = None, None
 		nspix = slf._argflag['run']['nsubpix']
 		bntyp = slf._argflag['run']['bintype']
 		tempresn = 'vfwhm(0.0)' # If Resolution not specified set it to zero and make it not tied to anything.
@@ -588,6 +599,9 @@ def load_data(slf, datlines, data=None):
 					uselabel = kwdspl[1]
 				elif kwdspl[0] == 'loadall' and kwdspl[1] in ['True','true','TRUE']:
 					loadall = True # Force this plot to be shown by itself
+		if wavemin is None or wavemax is None:
+			msgs.error("A wavelength range has not been specified")
+#		if True:
 		try:
 			# Check first if we are supposed to generate our own data
 			if slf._argflag['generate']['data']:
@@ -863,6 +877,8 @@ def load_fits(filename, colspl, wfe, verbose=2, ext=0, datatype='default'):
 	if wfe['continuum'] != -1:
 		try:
 			contin = datain[wfe['continuum'],:].astype(np.float64)
+			msgs.warn("Data found in column {0:d} for the file -".format(wfe['continuum']+1)+msgs.newline()+filename+msgs.newline()+"will not be used for the continuum", verbose=verbose)
+			contin = np.zeros(wavein.size).astype(np.float64)
 		except:
 			msgs.warn("A continuum was not provided as input for the file -"+msgs.newline()+filename, verbose=verbose)
 			msgs.info("The continuum will be output for the above file", verbose=verbose)
@@ -872,6 +888,8 @@ def load_fits(filename, colspl, wfe, verbose=2, ext=0, datatype='default'):
 	if wfe['zerolevel'] != -1:
 		try:
 			zeroin = datain[wfe['zerolevel'],:]
+			msgs.warn("Data found in column {0:d} for the file -".format(wfe['zerolevel']+1)+msgs.newline()+filename+msgs.newline()+"will not be used for the zero level", verbose=verbose)
+			contin = np.zeros(wavein.size).astype(np.float64)
 		except:
 			msgs.warn("A zero-level was not provided as input for the file -"+msgs.newline()+filename, verbose=verbose)
 			msgs.info("The zero-level will be output for the above file", verbose=verbose)
@@ -911,6 +929,7 @@ def load_model(slf, modlines, updateself=True):
 					'mpar':[],  # Store the parameters for the model
 					'mtie':[],  # Store the tied parameters and what parameter they are tied to.
 					'mlim':[],  # Store the limited parameters and their value
+					'mlnk':[],  # Store the linked parameter strings
 					'mfix':[],  # Determine if a parameter is fixed
 					'tpar':[],  # Sequence of letters used to tie/fix parameters
 					'mkey':[],  # Keyword parameters
@@ -952,7 +971,10 @@ def load_model(slf, modlines, updateself=True):
 		else:
 			msgs.error("Keyword '"+mdlspl[0]+"' is not a recognised model")
 		# Append whether this is emission or absorption and add one to the counter.
-		modpass['emab'].append(emabtag)
+		if mdlspl[0].strip() == 'variable':
+			modpass['emab'].append('va')
+		else:
+			modpass['emab'].append(emabtag)
 		cntr += 1
 	# Load the functional form of the FWHM
 	for i in range(len(slf._resn)):
@@ -1027,6 +1049,75 @@ def load_model(slf, modlines, updateself=True):
 	return modpass
 
 
+def load_links(slf, lnklines):
+	"""
+	Load the Links
+	"""
+	msgs.info("Loading the links",verbose=slf._argflag['out']['verbose'])
+	linka, linkb, linke = [], [], []
+	lnkcnt = 0
+	for i in range(len(lnklines)):
+		if len(lnklines[i].strip()) == 0: continue # Nothing on a line
+		nocoms = lnklines[i].lstrip().split('#')[0] # Remove everything on a line after the first instance of a comment symbol: #
+		if len(nocoms) == 0: continue # A comment line
+		lnkspl = nocoms.split()
+		# Check the link form is OK
+		if len(lnkspl) < 3:
+			msgs.error("You must specify links, with spaces, in the following example form -"+msgs.newline()+"va(vb) = 2.4 + vb")
+#		if lnkspl[1] not in ["+","-","*","/"]:
+#			msgs.error("Links must only contain one of the following operations: '+', '-', '*', or '/'")
+#		if lnkspl[1] not in ["="]:
+#			msgs.error("Links must only contain one of the following relational operators: '='")
+		# get the variables
+		try:
+			tL, tR = nocoms.split("=")
+			exp = tR.strip()
+			varA, tb = tL.strip().split("(")
+			varB = tb.rstrip(")").split(",")
+			for j in range(len(varB)): varB[j] = varB[j].strip()
+			varB = sorted(varB,key=len)[::-1]
+			if "numpy" in varB:
+				msgs.error("variable 'numpy' cannot be used in links - this string is reserved")
+			elif "np" in varB:
+				msgs.error("variable 'np' cannot be used in links - this string is reserved")
+		except:
+			msgs.error("You must specify links, with spaces, in the following example form -"+msgs.newline()+"va(vb) = 2.4 + vb")
+		if varA in linka:
+			msgs.warn("A link for the variable '{0:s}' is specified more than once -".format(varA)+msgs.newline()+lnklines[i].rstrip("\n")+msgs.newline()+"This link will be ignored",verbose=slf._argflag['out']['verbose'])
+			continue
+		# Check the two link parameters exist in the model
+		foundA, foundB = False, [False for all in varB]
+		for j in range(len(slf._modpass['tpar'])):
+			if slf._modpass['tpar'][j][0] == varA:
+				foundA = True
+				mtc = 0
+				for ka in range(len(slf._modpass['mtie'])):
+					for kb in range(len(slf._modpass['mtie'][ka])):
+						if mtc == slf._modpass['tpar'][j][1]-lnkcnt: # You need to subtract lnkcnt here because modpass['mtie'] is being updated during the for loop and changes a -1 to a more negative number
+							slf._modpass['mtie'][ka][kb] = -2-lnkcnt
+							mtc = -1
+						elif slf._modpass['mtie'][ka][kb] == -1 and mtc != -1: mtc += 1
+						elif slf._modpass['mtie'][ka][kb] == slf._modpass['tpar'][j][1]: slf._modpass['mtie'][ka][kb] = -2-lnkcnt
+			for k in range(len(varB)):
+				if slf._modpass['tpar'][j][0] == varB[k]:
+					foundB[k] = True
+		if not foundA:
+			msgs.error("Could not find the link string '{0:s}' in the model".format(lnkspl[0]))
+		for k in range(len(foundB)):
+			if not foundB[k]: msgs.error("Could not find the link string '{0:s}' in the model".format(varB[k]))
+		# If they are good, append them to the list, and add one to the link counter
+		linka.append(varA)
+		linkb.append(varB)
+		linke.append(exp)
+		lnkcnt += 1
+	# Write a dictionary with the relavant operations
+	lnkpass = dict({'opA':linka,     # First tied parameter
+					'opB':linkb,     # Array of linked parameters
+					'exp':linke})    # The relational expression
+	msgs.info("Links loaded successfully",verbose=slf._argflag['out']['verbose'])
+	return lnkpass
+
+
 def load_onefits(slf,loadname):
 	infile = pyfits.open(loadname)
 	# Check this is an ALIS onefits file
@@ -1059,14 +1150,15 @@ def load_onefits(slf,loadname):
 	###################
 	if ans == 1:
 		try:
-			tparlines, tdatlines, tmodlines = infile[0].header['parlines'], infile[0].header['datlines'], infile[0].header['modlines']
+			tparlines, tdatlines, tmodlines, tlnklines = infile[0].header['parlines'], infile[0].header['datlines'], infile[0].header['modlines'], infile[0].header['lnklines']
 			parlines = ''.join(chr(int(i)) for i in tparlines.split(","))
 			datlines = ''.join(chr(int(i)) for i in tdatlines.split(","))
 			modlines = ''.join(chr(int(i)) for i in tmodlines.split(","))
+			lnklines = ''.join(chr(int(i)) for i in tlnklines.split(","))
 		except:
 			msgs.error("The onefits file is corrupt")
 		slf._isonefits = True
-		return parlines.split("\n")+['plot only True'], datlines.split("\n"), modlines.split("\n")
+		return parlines.split("\n")+['plot only True'], datlines.split("\n"), modlines.split("\n"), lnklines.split("\n")
 	elif ans == 2:
 		# Get the best-fitting output model file
 		try:
@@ -1074,9 +1166,9 @@ def load_onefits(slf,loadname):
 			output  = ''.join(chr(int(i)) for i in toutput.split(","))
 		except:
 			msgs.error("The onefits file is corrupt")
-		parlines, datlines, modlines = load_input(slf,textstr=output)
+		parlines, datlines, modlines, lnklines = load_input(slf,textstr=output)
 		slf._isonefits = True
-		return parlines+['plot only True'], datlines, modlines
+		return parlines+['plot only True'], datlines, modlines, lnklines
 	###########################
 	###  Print the best-fitting model
 	###################
@@ -1094,14 +1186,15 @@ def load_onefits(slf,loadname):
 	elif ans == 4:
 		# Get the input model file
 		try:
-			tparlines, tdatlines, tmodlines = infile[0].header['parlines'], infile[0].header['datlines'], infile[0].header['modlines']
+			tparlines, tdatlines, tmodlines, tlnklines = infile[0].header['parlines'], infile[0].header['datlines'], infile[0].header['modlines'], infile[0].header['lnklines']
 			parlines = ''.join(chr(int(i)) for i in tparlines.split(","))
 			datlines = ''.join(chr(int(i)) for i in tdatlines.split(","))
 			modlines = ''.join(chr(int(i)) for i in tmodlines.split(","))
+			lnklines = ''.join(chr(int(i)) for i in tlnklines.split(","))
 		except:
 			msgs.error("The onefits file is corrupt")
 		slf._isonefits = True
-		return parlines.split("\n"), datlines.split("\n"), modlines.split("\n")
+		return parlines.split("\n"), datlines.split("\n"), modlines.split("\n"), lnklines.split("\n")
 	###########################
 	###  Extract the .mod file and the data
 	###################
@@ -1123,10 +1216,11 @@ def load_onefits(slf,loadname):
 			np.savetxt(dirname+"/data/"+datnames[-1],np.transpose((infile[i].data)))
 		# Extract the starting model
 		try:
-			tparlines, tdatlines, tmodlines = infile[0].header['parlines'], infile[0].header['datlines'], infile[0].header['modlines']
+			tparlines, tdatlines, tmodlines, tlnklines = infile[0].header['parlines'], infile[0].header['datlines'], infile[0].header['modlines'], infile[0].header['lnklines']
 			parlines = ''.join(chr(int(i)) for i in tparlines.split(","))
 			datlines = ''.join(chr(int(i)) for i in tdatlines.split(","))
 			modlines = ''.join(chr(int(i)) for i in tmodlines.split(","))
+			lnklines = ''.join(chr(int(i)) for i in tlnklines.split(","))
 		except:
 			msgs.error("The onefits file is corrupt")
 		fmod = open(dirname+"/model/"+infile[0].header['modname'],'w')
@@ -1146,6 +1240,10 @@ def load_onefits(slf,loadname):
 		fmod.write("\ndata end\n\nmodel read\n")
 		fmod.write(modlines)
 		fmod.write("model end\n")
+		if lnklines != '':
+			fmod.write("\nlink read\n")
+			fmod.write(lnklines)
+			fmod.write("link end\n")
 		msgs.info("The model and data file were extracted into the directory:"+msgs.newline()+dirname,verbose=slf._argflag['out']['verbose'])
 		sys.exit()
 	else:
@@ -1164,7 +1262,7 @@ def load_subpixels(slf, parin):
 			wvrng = [slf._wavefull[sp][ll:lu].min(),slf._wavefull[sp][ll:lu].max()]
 			modtyp[sp].append([])
 			for i in range(0,len(slf._modpass['mtyp'])):
-				if slf._modpass['emab'][i] == 'cv': continue # This is a convolution (not emission or absorption)
+				if slf._modpass['emab'][i] in ['cv','va']: continue # This is a convolution or variable (not emission or absorption)
 				if slf._specid[sp] not in slf._modpass['mkey'][i]['specid']: continue # Don't apply this model to this data
 				if lastemab[sn] == '' and slf._modpass['emab'][i] != 'em':
 					msgs.error("Model for specid="+slf._snipid[sp]+" must specify emission before absorption")
@@ -1219,14 +1317,14 @@ def load_subpixels(slf, parin):
 				contspx[sp] = np.append(contspx[sp], np.zeros(np.size(wavs)))
 			else: # Do linear interpolation
 				gradA = np.append((slf._contfull[sp][ll+1:lu]-slf._contfull[sp][ll:lu-1])/(slf._wavefull[sp][ll+1:lu]-slf._wavefull[sp][ll:lu-1]),(slf._contfull[sp][lu-1]-slf._contfull[sp][lu-2])/(slf._wavefull[sp][lu-1]-slf._wavefull[sp][lu-2])).reshape(lu-ll,1)
-				gradB = np.append( (slf._contfull[sp][ll+1]-slf._contfull[sp][ll])/(slf._wavefull[sp][ll+1]-slf._wavefull[sp][ll]), (slf._contfull[sp][ll+1:lu]-slf._contfull[sp][ll:lu-1])/(slf._wavefull[sp][ll+1:lu]-slf._wavefull[sp][ll:lu-1]),(slf._contfull[sp][lu-1]-slf._contfull[sp][lu-2])/(slf._wavefull[sp][lu-1]-slf._wavefull[sp][lu-2])).reshape(lu-ll,1)
+				gradB = np.append( np.array([(slf._contfull[sp][ll+1]-slf._contfull[sp][ll])/(slf._wavefull[sp][ll+1]-slf._wavefull[sp][ll])]), (slf._contfull[sp][ll+1:lu]-slf._contfull[sp][ll:lu-1])/(slf._wavefull[sp][ll+1:lu]-slf._wavefull[sp][ll:lu-1]),np.array([(slf._contfull[sp][lu-1]-slf._contfull[sp][lu-2])/(slf._wavefull[sp][lu-1]-slf._wavefull[sp][lu-2])])).reshape(lu-ll,1)
 				gradv = np.mean(np.array([gradA,gradB]),axis=0)
 				contspx[sp] = np.append(contspx[sp], (slf._contfull[sp][ll:lu].reshape(lu-ll,1) + (wavs.reshape(lu-ll,nexbins[sp][sn])-slf._wavefull[sp][ll:lu].reshape(lu-ll,1))*gradv).flatten(0))
 			if np.all(1.0-slf._zerofull[sp][ll:lu]): # No zero-level is provided -- no interpolation is necessary
 				zerospx[sp] = np.append(zerospx[sp], np.zeros(np.size(wavs)))
 			else: # Do linear interpolation
 				gradA = np.append((slf._zerofull[sp][ll+1:lu]-slf._zerofull[sp][ll:lu-1])/(slf._wavefull[sp][ll+1:lu]-slf._wavefull[sp][ll:lu-1]),(slf._zerofull[sp][lu-1]-slf._zerofull[sp][lu-2])/(slf._wavefull[sp][lu-1]-slf._wavefull[sp][lu-2])).reshape(lu-ll,1)
-				gradB = np.append( (slf._zerofull[sp][ll+1]-slf._zerofull[sp][ll])/(slf._wavefull[sp][ll+1]-slf._wavefull[sp][ll]), (slf._zerofull[sp][ll+1:lu]-slf._zerofull[sp][ll:lu-1])/(slf._wavefull[sp][ll+1:lu]-slf._wavefull[sp][ll:lu-1]),(slf._zerofull[sp][lu-1]-slf._zerofull[sp][lu-2])/(slf._wavefull[sp][lu-1]-slf._wavefull[sp][lu-2])).reshape(lu-ll,1)
+				gradB = np.append( np.array([(slf._zerofull[sp][ll+1]-slf._zerofull[sp][ll])/(slf._wavefull[sp][ll+1]-slf._wavefull[sp][ll])]), (slf._zerofull[sp][ll+1:lu]-slf._zerofull[sp][ll:lu-1])/(slf._wavefull[sp][ll+1:lu]-slf._wavefull[sp][ll:lu-1]),np.array([(slf._zerofull[sp][lu-1]-slf._zerofull[sp][lu-2])/(slf._wavefull[sp][lu-1]-slf._wavefull[sp][lu-2])])).reshape(lu-ll,1)
 				gradv = np.mean(np.array([gradA,gradB]),axis=0)
 				zerospx[sp] = np.append(zerospx[sp], (slf._zerofull[sp][ll:lu].reshape(lu-ll,1) + (wavs.reshape(lu-ll,nexbins[sp][sn])-slf._wavefull[sp][ll:lu].reshape(lu-ll,1))*gradv).flatten(0))
 		posnspx[sp].append(wavespx[sp].size)
@@ -1236,13 +1334,19 @@ def load_subpixels(slf, parin):
 
 
 def load_par_influence(slf, parin):
+	def inlinks(ivar):
+		foundit = False
+		for i in range(len(slf._modpass['tpar'])):
+			if slf._modpass['tpar'][i][0] in slf._links['opA'] and slf._modpass['tpar'][i][1] == ivar: foundit = True
+		return foundit
+	##################
 	pinfl = []
 	uinfl = np.array([],dtype=np.int)
 	modtyp=[[] for all in slf._posnfull]
 	# Find the model parameters that influence a given sp+sn
 	for sp in range(0,len(slf._posnfull)):
 		lastemab, iea = ['' for all in slf._posnfull[sp][:-1]], [-1 for all in slf._posnfull[sp][:-1]]
-		pinfl.append([[] for all in slf._posnfull[sp][:-1]])
+		pinfl.append([np.array([],dtype=np.int) for all in slf._posnfull[sp][:-1]])
 		for sn in range(len(slf._posnfull[sp])-1):
 			ll = slf._posnfull[sp][sn]
 			lu = slf._posnfull[sp][sn+1]
@@ -1252,8 +1356,9 @@ def load_par_influence(slf, parin):
 				if slf._modpass['emab'][i] == 'cv': continue # This is a convolution (not emission or absorption)
 				if slf._specid[sp] not in slf._modpass['mkey'][i]['specid']: continue # Don't apply this model to this data
 				if lastemab[sn] == '' and slf._modpass['emab'][i] != 'em':
-					msgs.error("Model for specid="+slf._snipid[sp]+" must specify emission before absorption")
-				if lastemab[sn] != slf._modpass['emab'][i]:
+					if slf._modpass['emab'][i] != 'va':
+						msgs.error("Model for specid="+slf._snipid[sp]+" must specify emission before absorption")
+				if lastemab[sn] != slf._modpass['emab'][i] and slf._modpass['emab'][i] != 'va':
 					modtyp[sp][sn].append(np.array(['']))
 					iea[sn] += 1
 					lastemab[sn] = slf._modpass['emab'][i]
@@ -1265,8 +1370,8 @@ def load_par_influence(slf, parin):
 				slf._funcinst[mtyp]._keywd = slf._modpass['mkey'][i]
 				params, infv = slf._funccall[mtyp].set_vars(slf._funcinst[mtyp], parin, slf._levadd[i], slf._modpass, i, wvrng=wvrng, spid=slf._specid[sp], levid=slf._levadd, getinfl=True)
 				for j in infv:
-					pinfl[sp][sn].append(j)
-					if j not in uinfl: uinfl = np.append(uinfl,j)
+					if not inlinks(j): pinfl[sp][sn] = np.append(pinfl[sp][sn],j)
+					if j not in uinfl and not inlinks(j): uinfl = np.append(uinfl,j)
 	# Test if the convolution influences the result of a given sp+sn
 	stf, enf = [0 for all in slf._posnfull], [0 for all in slf._posnfull]
 	cvind = np.where(np.array(slf._modpass['emab'])=='cv')[0][0]
@@ -1276,8 +1381,8 @@ def load_par_influence(slf, parin):
 			params, infv = slf._funccall[mtyp].set_vars(slf._funcinst[mtyp], parin, slf._levadd[cvind], slf._modpass, cvind, getinfl=True)
 			cvind += 1
 			for j in infv:
-				if j not in pinfl[sp][sn]: pinfl[sp][sn].append(j)
-				if j not in uinfl: uinfl = np.append(uinfl,j)
+				if j not in pinfl[sp][sn] and not inlinks(j): pinfl[sp][sn] = np.append(pinfl[sp][sn],j)
+				if j not in uinfl and not inlinks(j): uinfl = np.append(uinfl,j)
 	# Sort the list of all free parameter ID numbers
 	uinfl.sort()
 	# Map the parameter ID numbers to a *free* parameter ID number
@@ -1298,7 +1403,8 @@ def load_par_influence(slf, parin):
 #	print opinfl
 #	sys.exit()
 #	print "#################"
-	return opinfl
+#	return opinfl
+	return [opinfl,pinfl]
 
 def get_binsize(wave, bintype="km/s", maxonly=True, verbose=2):
 	binsize  = np.zeros((2,wave.size))
@@ -1326,7 +1432,7 @@ def load_parinfo(slf):
 	for i in range(len(slf._modpass['mtyp'])):
 		levadd.append(level)
 		mtyp = slf._modpass['mtyp'][i]
-		parinfo, add = slf._funccall[mtyp].set_pinfo(slf._funcinst[mtyp], parinfo, level, slf._modpass, i)
+		parinfo, add = slf._funccall[mtyp].set_pinfo(slf._funcinst[mtyp], parinfo, level, slf._modpass, slf._links, i)
 		level += add
 	# Test if some parameters are outside the limits
 	if slf._argflag['run']['limpar']:
@@ -1345,3 +1451,51 @@ def load_parinfo(slf):
 				msgs.info("Setting this parameter to the limiting value of the model: {0:f}".format(newval))
 			slf._modpass['p0'][i], parinfo[i]['value'] = newval, newval
 	return parinfo, levadd
+
+def load_tied(p, ptied=None, infl=None):
+	###############
+	if infl is None:
+		for i in range(len(ptied)):
+			if ptied[i] == '':
+				continue
+			cmd = 'p[' + str(i) + '] = ' + ptied[i]
+			exec(cmd)
+	else:
+		for i in range(len(ptied)):
+			if ptied[i] == '':
+				continue
+			ival, pstr = getis(ptied[i], i, infl)
+			cmd = 'p[' + str(ival) + '] = ' + pstr
+			exec(cmd)
+	return p
+
+def getis(string, ival, infl, retlhs=True):
+	strspl = (" "+string).split("p[")
+	ids = [int(i.split("]")[0]) for i in strspl[1:]]
+	rids = [-1 for i in strspl[1:]]
+	jval = -1
+	foundall = False
+	for sp in range(len(infl[0])):
+		for sn in range(len(infl[0][sp])):
+			for j in range(len(infl[0][sp][sn])):
+				if infl[1][sp][sn][j] == ival:
+					jval = infl[0][sp][sn][j]
+					if -1 not in rids:
+						foundall = True
+						break
+				else:
+					for i in range(len(ids)):
+						if infl[1][sp][sn][j] == ids[i]:
+							rids[i] = infl[0][sp][sn][j]
+							if -1 not in rids and jval != -1:
+								foundall = True
+								break
+				if foundall: break
+			if foundall: break
+		if foundall: break
+	# Reassemble the function string
+	pstr = strspl[0]
+	for i in range(1,len(strspl)):
+		pstr += "p["+str(rids[i-1])+"]"+"]".join(strspl[i].split("]")[1:])
+	if retlhs: return jval, pstr.strip()
+	else: return pstr.strip()

@@ -36,15 +36,15 @@ msgs = almsgs.msgs()
 # Make sure each snip contains an absorption feature (or give a warning).
 # generate starting parameter files
 
-def myfunct_wrap(p, fjac=None, x=None, y=None, err=None, fdict=None, ddpid=None, output=0):
+def myfunct_wrap(p, fjac=None, x=None, y=None, err=None, fdict=None, ddpid=None, pp=None, getemab=False, emab=None, output=0):
 	instance=ClassMain(None, getinst=True)
 	if fdict is None: fdict = dict({})
 	instance.__dict__.update(fdict)
-	return ClassMain.myfunct(instance, p, fjac=fjac, x=x, y=y, err=err, ddpid=ddpid, output=output)
+	return ClassMain.myfunct(instance, p, fjac=fjac, x=x, y=y, err=err, ddpid=ddpid, pp=pp, getemab=getemab, emab=emab, output=output)
 
 class ClassMain:
 
-	def __init__(self, argflag, getinst=False, modelfile=None, parlines=[], datlines=[], modlines=[], data=None, fitonly=False, verbose=None):
+	def __init__(self, argflag, getinst=False, modelfile=None, parlines=[], datlines=[], modlines=[], lnklines=[], data=None, fitonly=False, verbose=None):
 		if getinst: return # Just get an instance
 
 		# Set parameters
@@ -68,15 +68,15 @@ class ClassMain:
 		# Load the Input file
 		if modelfile is not None:
 			self._argflag['run']['modname'] = modelfile
-			self._parlines, self._datlines, self._modlines = alload.load_input(self)
+			self._parlines, self._datlines, self._modlines, self._lnklines = alload.load_input(self)
 			self._retself = True
-		elif parlines != [] or modlines != [] or datlines != []:
-			self._parlines, self._datlines, self._modlines = parlines, datlines, modlines
+		elif parlines != [] or modlines != [] or datlines != [] or lnklines != []:
+			self._parlines, self._datlines, self._modlines, self._lnklines = parlines, datlines, modlines, lnklines
 			self._argflag = alload.set_params(self._parlines, copy.deepcopy(self._argflag), setstr="Model ")
 			alload.check_argflag(self._argflag)
 			self._retself = True
 		else:
-			self._parlines, self._datlines, self._modlines = alload.load_input(self)
+			self._parlines, self._datlines, self._modlines, self._lnklines = alload.load_input(self)
 
 		# Load the atomic data
 		self._atomic = alload.load_atomic(self)
@@ -96,6 +96,9 @@ class ClassMain:
 		# Load the Model
 		self._modpass = alload.load_model(self, self._modlines)
 
+		# Load the Links
+		self._links = alload.load_links(self, self._lnklines)
+
 #		print self._modpass
 #		print self._snipid
 #		print self._specid
@@ -107,17 +110,19 @@ class ClassMain:
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 # The fitting code
 
-	def model_func(self, x, p, pos, ddpid=None, output=0):
+	def model_func(self, x, p, pos, ddpid=None, getemab=False, output=0):
 		if self._argflag['run']['renew_subpix']:
 			wavespx, contspx, zerospx, posnspx, nexbins = alload.load_subpixels(self, p) # recalculate the sub-pixellation of the spectrum
 		else:
 			wavespx, contspx, zerospx, posnspx, nexbins = self._wavespx, self._contspx, self._zerospx, self._posnspx, self._nexbins
 		if ddpid is None:
 			self._pinfl = alload.load_par_influence(self, p) # Determine which parameters influence each sp and sn
+#		if ddpid is not None and self._qanytied:
+#			p = alload.load_tied(p, self._ptied, infl=self._pinfl)
+#			msgs.bug("since na is not a free parameter, this does not need to be applied here, and the extra functionality getis and part of load_tied can be removed. You need to make sure that all functions are picking up on the linked (i.e. tied) parameters")
 #		modgpu=[]
-		model, mzero, mcont, modcv, modcvf = [], copy.deepcopy(zerospx), copy.deepcopy(contspx), [], []
+		modelem, modelab, mzero, mcont, modcv, modcvf = [], [], copy.deepcopy(zerospx), copy.deepcopy(contspx), [], []
 		self._modfinal, self._contfinal, self._zerofinal = [], [], []
-		#print zerospx
 		# Setup of the data <---> model arrays
 		pararr=[[] for all in pos]
 		keyarr=[[] for all in pos]
@@ -127,7 +132,8 @@ class ClassMain:
 #		print self._snipid
 #		print self._specid
 		for sp in range(0,len(pos)):
-			model.append(np.zeros(wavespx[sp].size))
+			modelem.append(np.zeros(wavespx[sp].size))
+			modelab.append(np.ones(wavespx[sp].size))
 #			mzero.append(zerospx[sp])
 #			mcont.append(contspx[sp])
 			modcv.append(np.zeros(x[sp].size))
@@ -162,8 +168,9 @@ class ClassMain:
 						zerlev[sp].append(self._modpass['mkey'][i])
 						continue
 					if lastemab[sn] == '' and self._modpass['emab'][i] != 'em':
-						msgs.error("Model for specid={0:s} must specify emission before absorption".format(self._snipid[sp])) # BUG: Not quoting the correct specid...
-					if lastemab[sn] != self._modpass['emab'][i]:
+						if self._modpass['emab'][i] != 'va':
+							msgs.error("Model for specid={0:s} must specify emission before absorption".format(self._snipid[sp])) # BUG: Not quoting the correct specid...
+					if lastemab[sn] != self._modpass['emab'][i] and self._modpass['emab'][i] != 'va':
 						pararr[sp][sn].append([])
 						keyarr[sp][sn].append([])
 						modtyp[sp][sn].append(np.array(['']))
@@ -171,7 +178,7 @@ class ClassMain:
 						lastemab[sn] = self._modpass['emab'][i]
 					# If this parameter doesn't influence the sp+sn, don't go any further.
 					if ddpid is not None:
-						if ddpid not in self._pinfl[sp][sn]: continue
+						if ddpid not in self._pinfl[0][sp][sn]: continue
 					mtyp=self._modpass['mtyp'][i]
 #					if mtyp not in modgpu: modgpu.append(mtyp)
 					if np.where(mtyp==modtyp[sp][sn][iea[sn]])[0].size != 1:
@@ -245,7 +252,7 @@ class ClassMain:
 		for sp in range(len(pararr)):
 			for sn in range(len(pararr[sp])):
 				if ddpid is not None: # If this parameter doesn't influence the sp+sn, don't calculate it.
-					if ddpid not in self._pinfl[sp][sn]: continue
+					if ddpid not in self._pinfl[0][sp][sn]: continue
 				ll = posnspx[sp][sn]
 				lu = posnspx[sp][sn+1]
 				wave = wavespx[sp][ll:lu]
@@ -260,6 +267,7 @@ class ClassMain:
 					else: aetag = 'ab'
 					for md in range(0,len(pararr[sp][sn][ea])):
 						mtyp = modtyp[sp][sn][ea][md]
+						if mtyp == "variable": continue
 						if len(pararr[sp][sn][ea][md]) == 0: continue # OR PARAMETER NOT BEING VARIED!!!
 						# Multiprocess here and send to either the CPU or GPU
 #						if self._argflag['run']['ngpus'] != 0:
@@ -275,11 +283,11 @@ class ClassMain:
 #						else:
 						mout = self._funccall[mtyp].call_CPU(self._funcinst[mtyp], wave, pararr[sp][sn][ea][md], ae=aetag, mkey=keyarr[sp][sn][ea][md])
 						if ea%2 == 0: # emission
-							model[sp][ll:lu] += mout
+							modelem[sp][ll:lu] += mout
 						else: # absorption
-							model[sp][ll:lu] *= mout
+							modelab[sp][ll:lu] *= mout
 					if ea == 0:
-						mcont[sp][ll:lu] += model[sp][ll:lu].copy()
+						mcont[sp][ll:lu] += modelem[sp][ll:lu].copy()
 		# Convolve the data with the appropriate instrumental profile
 		stf, enf = [0 for all in pos], [0 for all in pos]
 		cvind = np.where(np.array(self._modpass['emab'])=='cv')[0][0]
@@ -289,7 +297,7 @@ class ClassMain:
 					msgs.bug("Convolution cannot be performed with model "+self._modpass['mtyp'][cvind],verbose=self._argflag['out']['verbose'])
 				# If this parameter doesn't influence the sp+sn, don't go any further.
 				if ddpid is not None:
-					if ddpid not in self._pinfl[sp][sn]:
+					if ddpid not in self._pinfl[0][sp][sn]:
 						ll = pos[sp][sn]
 						lu = pos[sp][sn+1]
 						w = np.where((x[sp][ll:lu] >= self._posnfit[sp][2*sn+0]) & (x[sp][ll:lu] <= self._posnfit[sp][2*sn+1]))
@@ -306,12 +314,17 @@ class ClassMain:
 				mtyp = self._modpass['mtyp'][cvind]
 				self._funcinst[mtyp]._keywd = self._modpass['mkey'][cvind]
 				params = self._funccall[mtyp].set_vars(self._funcinst[mtyp], p, self._levadd[cvind], self._modpass, cvind)
-				mdtmp = self._funccall[mtyp].call_CPU(self._funcinst[mtyp], wavespx[sp][llx:lux], model[sp][llx:lux], params)
+				mdtmp = self._funccall[mtyp].call_CPU(self._funcinst[mtyp], wavespx[sp][llx:lux], modelem[sp][llx:lux]*modelab[sp][llx:lux], params)
 				# Apply the zero-level correction if necessary
 				if len(zerlev[sp]) != 0:
 					mdtmp = mcont[sp][llx:lux]*(mdtmp +  mzero[sp][llx:lux])/(mcont[sp][llx:lux]+mzero[sp][llx:lux]) # This is a general case.
 #					mdtmp = mdtmp +  mzero[sp][llx:lux]*(1.0-mdtmp)/mcont[sp][llx:lux]
 				modcv[sp][ll:lu] = mdtmp.reshape(x[sp][ll:lu].size,nexbins[sp][sn]).sum(axis=1)/np.float64(nexbins[sp][sn])
+				# Make sure this model shouldn't be capped
+				if self._argflag['run']['capvalue'] is not None:
+					wc = np.where(modcv[sp][ll:lu] >= self._argflag['run']['capvalue'])[0]
+					if np.size(wc) != 0:
+						modcv[sp][ll:lu][wc] = self._argflag['run']['capvalue']
 				# Finally, apply the user-specified continuum (if it's not 1.0)
 #				modcv[sp][ll:lu] *= self._contfull[sp][ll:lu]
 				# Extract the fitted part of the model.
@@ -327,19 +340,220 @@ class ClassMain:
 				cvind += 1
 		del wavespx, posnspx, nexbins
 		del mzero, mcont
-		if output == 0: return modcvf
+#		if output == 0: return modcvf
+		if output == 0:
+			if getemab:
+				return modcvf, [modelem, modelab]
+			else:
+				return modcvf
 		elif output == 1: return modcv
 		elif output == 2: return modcvf
 		elif output == 3: return self._modfinal
 		else: msgs.bug("The value {0:d} for keyword 'output' is not allowed".format(output),verbose=self._argflag['out']['verbose'])
 
-	def myfunct(self, p, fjac=None, x=None, y=None, err=None, output=0, ddpid=None):
+	def model_func_ddp(self, x, p, pp, pos, ddpid=None, emab=None, output=0):
+		if emab is None:
+			msgs.error("The keyword 'emab' of function alis.model_func_ddp must be a 2-element array")
+		if self._argflag['run']['renew_subpix']:
+			wavespx, contspx, zerospx, posnspx, nexbins = alload.load_subpixels(self, p) # recalculate the sub-pixellation of the spectrum
+		else:
+			wavespx, contspx, zerospx, posnspx, nexbins = self._wavespx, self._contspx, self._zerospx, self._posnspx, self._nexbins
+		# Extract the pure emission and pure absorption models
+		modelem, modelab = copy.deepcopy(emab[0]), copy.deepcopy(emab[1])
+		mzero, mcont, modcv, modcvf = copy.deepcopy(zerospx), copy.deepcopy(contspx), [], []
+		# Setup of the data <---> model arrays
+		opararr=[[] for all in pos]
+		ppararr=[[] for all in pos]
+		okeyarr=[[] for all in pos]
+		pkeyarr=[[] for all in pos]
+		modtyp=[[] for all in pos]
+		zerlev=[[] for all in pos]
+		for sp in range(0,len(pos)):
+			modcv.append(np.zeros(x[sp].size))
+			modcvf.append(np.zeros(self._wavefit[sp].size))
+			lastemab, iea = ['' for all in pos[sp][:-1]], [-1 for all in pos[sp][:-1]]
+			for sn in range(len(pos[sp])-1):
+				ll = pos[sp][sn]
+				lu = pos[sp][sn+1]
+				wvrng = [x[sp][ll:lu].min(),x[sp][ll:lu].max()]
+				opararr[sp].append([])
+				ppararr[sp].append([])
+				okeyarr[sp].append([])
+				pkeyarr[sp].append([])
+				modtyp[sp].append([])
+				for i in range(0,len(self._modpass['mtyp'])):
+					if self._modpass['emab'][i] == 'cv': continue # This is a convolution (not emission or absorption)
+					if self._specid[sp] not in self._modpass['mkey'][i]['specid']: continue # Don't apply this model to this data
+					if self._modpass['emab'][i] == 'zl': # Get the parameters of the zerolevel
+						if sn != 0: continue
+						if len(zerlev[sp]) != 0:
+							msgs.error("You can only specify the zero-level once for each specid.")
+						mtyp=self._modpass['mtyp'][i]
+						self._funcinst[mtyp]._keywd = self._modpass['mkey'][i]
+						zparams = self._funccall[mtyp].set_vars(self._funcinst[mtyp], p, self._levadd[i], self._modpass, i, spid=self._specid[sp], levid=self._levadd)
+						if len(zparams) == 0: continue
+						zerlev[sp].append(mtyp)
+						zerlev[sp].append(np.array([zparams]))
+						zerlev[sp].append(self._modpass['mkey'][i])
+						continue
+					if lastemab[sn] == '' and self._modpass['emab'][i] != 'em':
+						if self._modpass['emab'][i] != 'va':
+							msgs.error("Model for specid={0:s} must specify emission before absorption".format(self._snipid[sp])) # BUG: Not quoting the correct specid...
+					if lastemab[sn] != self._modpass['emab'][i] and self._modpass['emab'][i] != 'va':
+						opararr[sp][sn].append([])
+						ppararr[sp][sn].append([])
+						okeyarr[sp][sn].append([])
+						pkeyarr[sp][sn].append([])
+						modtyp[sp][sn].append(np.array(['']))
+						iea[sn] += 1
+						lastemab[sn] = self._modpass['emab'][i]
+					# If this parameter doesn't influence the sp+sn, don't go any further.
+					if ddpid is not None:
+						if ddpid not in self._pinfl[0][sp][sn]: continue
+					mtyp=self._modpass['mtyp'][i]
+					if np.where(mtyp==modtyp[sp][sn][iea[sn]])[0].size != 1:
+						opararr[sp][sn][iea[sn]].append([])
+						ppararr[sp][sn][iea[sn]].append([])
+						okeyarr[sp][sn][iea[sn]].append([])
+						pkeyarr[sp][sn][iea[sn]].append([])
+						modtyp[sp][sn][iea[sn]] = np.append(modtyp[sp][sn][iea[sn]],mtyp)
+						if modtyp[sp][sn][iea[sn]][0] == '': modtyp[sp][sn][iea[sn]] = np.delete(modtyp[sp][sn][iea[sn]], 0)
+					mid = np.where(mtyp==modtyp[sp][sn][iea[sn]])[0][0]
+					self._funcinst[mtyp]._keywd = self._modpass['mkey'][i]
+					sddpid = self._pinfl[1][sp][sn][np.where(self._pinfl[0][sp][sn]==ddpid)[0][0]]
+					oparams = self._funccall[mtyp].set_vars(self._funcinst[mtyp], p, self._levadd[i], self._modpass, i, wvrng=wvrng, spid=self._specid[sp], levid=self._levadd, ddpid=sddpid)
+					pparams = self._funccall[mtyp].set_vars(self._funcinst[mtyp], pp, self._levadd[i], self._modpass, i, wvrng=wvrng, spid=self._specid[sp], levid=self._levadd, ddpid=sddpid)
+					if len(oparams) == 0: continue
+					if np.size(np.shape(oparams)) == 1:
+						if np.size(opararr[sp][sn][iea[sn]][mid]) == 0:
+							opararr[sp][sn][iea[sn]][mid] = np.array([oparams])
+						else:
+							if np.shape(opararr[sp][sn][iea[sn]][mid])[1] != np.shape(np.array([oparams]))[1]:
+								msgs.error("Error when getting parameters for model function '{0:s}'".format(mtyp)+msgs.newline()+"This model probably has a variable number of parameters and has"+msgs.newline()+"been specified twice for one specid. Make sure you give the same"+msgs.newline()+"number of parameters to this function for a given specid.")
+							opararr[sp][sn][iea[sn]][mid] = np.append(opararr[sp][sn][iea[sn]][mid],np.array([oparams]),axis=0)
+						okeyarr[sp][sn][iea[sn]][mid].append(self._modpass['mkey'][i])
+					else:
+						if np.size(opararr[sp][sn][iea[sn]][mid]) == 0:
+							opararr[sp][sn][iea[sn]][mid] = oparams
+						else:
+							if np.shape(opararr[sp][sn][iea[sn]][mid])[1] != np.shape(oparams)[1]:
+								msgs.error("Error when getting parameters for model function '{0:s}'".format(mtyp)+msgs.newline()+"This model probably has a variable number of parameters and has"+msgs.newline()+"been specified twice for one specid. Make sure you give the same"+msgs.newline()+"number of parameters to this function for a given specid.")
+							opararr[sp][sn][iea[sn]][mid] = np.append(opararr[sp][sn][iea[sn]][mid],oparams,axis=0)
+						for all in range(np.shape(oparams)[0]): okeyarr[sp][sn][iea[sn]][mid].append(self._modpass['mkey'][i])
+					if np.size(np.shape(pparams)) == 1:
+						if np.size(ppararr[sp][sn][iea[sn]][mid]) == 0:
+							ppararr[sp][sn][iea[sn]][mid] = np.array([pparams])
+						else:
+							if np.shape(ppararr[sp][sn][iea[sn]][mid])[1] != np.shape(np.array([pparams]))[1]:
+								msgs.error("Error when getting parameters for model function '{0:s}'".format(mtyp)+msgs.newline()+"This model probably has a variable number of parameters and has"+msgs.newline()+"been specified twice for one specid. Make sure you give the same"+msgs.newline()+"number of parameters to this function for a given specid.")
+							ppararr[sp][sn][iea[sn]][mid] = np.append(ppararr[sp][sn][iea[sn]][mid],np.array([pparams]),axis=0)
+						pkeyarr[sp][sn][iea[sn]][mid].append(self._modpass['mkey'][i])
+					else:
+						if np.size(ppararr[sp][sn][iea[sn]][mid]) == 0:
+							ppararr[sp][sn][iea[sn]][mid] = pparams
+						else:
+							if np.shape(ppararr[sp][sn][iea[sn]][mid])[1] != np.shape(pparams)[1]:
+								msgs.error("Error when getting parameters for model function '{0:s}'".format(mtyp)+msgs.newline()+"This model probably has a variable number of parameters and has"+msgs.newline()+"been specified twice for one specid. Make sure you give the same"+msgs.newline()+"number of parameters to this function for a given specid.")
+							ppararr[sp][sn][iea[sn]][mid] = np.append(ppararr[sp][sn][iea[sn]][mid],pparams,axis=0)
+						for all in range(np.shape(pparams)[0]): pkeyarr[sp][sn][iea[sn]][mid].append(self._modpass['mkey'][i])
+		# Calculate the model
+		for sp in range(len(opararr)):
+			for sn in range(len(opararr[sp])):
+				if ddpid is not None: # If this parameter doesn't influence the sp+sn, don't calculate it.
+					if ddpid not in self._pinfl[0][sp][sn]: continue
+				ll = posnspx[sp][sn]
+				lu = posnspx[sp][sn+1]
+				wave = wavespx[sp][ll:lu]
+				# First subtract the zero-level from the data
+				if len(zerlev[sp]) != 0:
+					mtyp = zerlev[sp][0]
+					zpar = zerlev[sp][1]
+					zkey = zerlev[sp][2]
+					mzero[sp][ll:lu] += self._funccall[mtyp].call_CPU(self._funcinst[mtyp], wave, zpar, ae='zl', mkey=zkey)
+				for ea in range(len(opararr[sp][sn])):
+					if ea%2 == 0: aetag = 'em'
+					else: aetag = 'ab'
+					for md in range(0,len(opararr[sp][sn][ea])):
+						mtyp = modtyp[sp][sn][ea][md]
+						if mtyp == "variable": continue
+						if len(opararr[sp][sn][ea][md]) == 0: continue # OR PARAMETER NOT BEING VARIED!!!
+						# Calculate both the old and new model
+						if ea%2 == 0: # emission
+							submod = self._funccall[mtyp].call_CPU(self._funcinst[mtyp], wave, opararr[sp][sn][ea][md], ae='em', mkey=okeyarr[sp][sn][ea][md])
+							ppmod  = self._funccall[mtyp].call_CPU(self._funcinst[mtyp], wave, ppararr[sp][sn][ea][md], ae='em', mkey=pkeyarr[sp][sn][ea][md])
+							modelem[sp][ll:lu] += ppmod-submod
+						else: # absorption
+							submod = self._funccall[mtyp].call_CPU(self._funcinst[mtyp], wave, opararr[sp][sn][ea][md], ae='ab', mkey=okeyarr[sp][sn][ea][md])
+							ppmod  = self._funccall[mtyp].call_CPU(self._funcinst[mtyp], wave, ppararr[sp][sn][ea][md], ae='ab', mkey=pkeyarr[sp][sn][ea][md])
+							w = np.where(submod != 0.0)[0]
+							modelab[sp][ll:lu][w] /= submod[w]
+							modelab[sp][ll:lu] *= ppmod
+					if ea == 0:
+						mcont[sp][ll:lu] += modelem[sp][ll:lu].copy()
+		# Convolve the data with the appropriate instrumental profile
+		stf, enf = [0 for all in pos], [0 for all in pos]
+		cvind = np.where(np.array(self._modpass['emab'])=='cv')[0][0]
+		for sp in range(len(pos)):
+			for sn in range(len(pos[sp])-1):
+				if self._modpass['emab'][cvind] != 'cv': # Check that this is indeed a convolution
+					msgs.bug("Convolution cannot be performed with model "+self._modpass['mtyp'][cvind],verbose=self._argflag['out']['verbose'])
+				# If this parameter doesn't influence the sp+sn, don't go any further.
+				if ddpid is not None:
+					if ddpid not in self._pinfl[0][sp][sn]:
+						ll = pos[sp][sn]
+						lu = pos[sp][sn+1]
+						w = np.where((x[sp][ll:lu] >= self._posnfit[sp][2*sn+0]) & (x[sp][ll:lu] <= self._posnfit[sp][2*sn+1]))
+						wA= np.in1d(x[sp][ll:lu][w], self._wavefit[sp])
+						wB= np.where(wA==True)
+						enf[sp] = stf[sp] + x[sp][ll:lu][w][wB].size
+						stf[sp] = enf[sp]
+						cvind += 1
+						continue
+				llx = posnspx[sp][sn]
+				lux = posnspx[sp][sn+1]
+				ll = pos[sp][sn]
+				lu = pos[sp][sn+1]
+				mtyp = self._modpass['mtyp'][cvind]
+				self._funcinst[mtyp]._keywd = self._modpass['mkey'][cvind]
+				params = self._funccall[mtyp].set_vars(self._funcinst[mtyp], pp, self._levadd[cvind], self._modpass, cvind)
+				mdtmp = self._funccall[mtyp].call_CPU(self._funcinst[mtyp], wavespx[sp][llx:lux], modelem[sp][llx:lux]*modelab[sp][llx:lux], params)
+				# Apply the zero-level correction if necessary
+				if len(zerlev[sp]) != 0:
+					mdtmp = mcont[sp][llx:lux]*(mdtmp +  mzero[sp][llx:lux])/(mcont[sp][llx:lux]+mzero[sp][llx:lux]) # This is a general case.
+				modcv[sp][ll:lu] = mdtmp.reshape(x[sp][ll:lu].size,nexbins[sp][sn]).sum(axis=1)/np.float64(nexbins[sp][sn])
+				# Finally, apply the user-specified continuum (if it's not 1.0)
+#				modcv[sp][ll:lu] *= self._contfull[sp][ll:lu]
+				# Extract the fitted part of the model.
+				w = np.where((x[sp][ll:lu] >= self._posnfit[sp][2*sn+0]) & (x[sp][ll:lu] <= self._posnfit[sp][2*sn+1]))
+				wA= np.in1d(x[sp][ll:lu][w], self._wavefit[sp])
+				wB= np.where(wA==True)
+				enf[sp] = stf[sp] + x[sp][ll:lu][w][wB].size
+				modcvf[sp][stf[sp]:enf[sp]] = modcv[sp][ll:lu][w][wB]
+				stf[sp] = enf[sp]
+				cvind += 1
+		del wavespx, posnspx, nexbins
+		del modelem, modelab
+		del mzero, mcont
+		if output != 0: msgs.bug("The value {0:d} for keyword 'output' is not allowed when performing derivatives".format(output),verbose=self._argflag['out']['verbose'])
+		return modcvf
+
+
+	def myfunct(self, p, fjac=None, x=None, y=None, err=None, output=0, ddpid=None, pp=None, getemab=False, emab=None):
 		"""
 		output = 0 : Return the model for just the fitted region
 		       = 1 : Return the model for the entire data
 		       = 2 : Return the model for just the fitted region with -1 set to data outside the fitted region
 		"""
-		modconv_fit = self.model_func(self._wavefull, p, self._posnfull, ddpid=ddpid, output=output)
+		if ddpid is None:
+			if getemab:
+				modconv_fit, emabv = self.model_func(self._wavefull, p, self._posnfull, ddpid=ddpid, output=output, getemab=getemab)
+			else:
+				modconv_fit = self.model_func(self._wavefull, p, self._posnfull, ddpid=ddpid, output=output)
+		else:
+			# If not running the speed-up use:
+			modconv_fit = self.model_func(self._wavefull, pp, self._posnfull, ddpid=ddpid, output=output, getemab=getemab)
+			# Otherwise, you should use the following to speed-up the calculation:
+			#modconv_fit = self.model_func_ddp(self._wavefull, p, pp, self._posnfull, ddpid=ddpid, output=output, emab=emab)
 		status = 0
 		modf = np.array([])
 		for sp in range(len(self._posnfull)):
@@ -351,7 +565,11 @@ class ClassMain:
 			return modf
 		elif output == 3:
 			return modconv_fit
-		if (fjac) == None: return [status, (y-modf)/err]
+		if (fjac) == None:
+			if getemab:
+				return [status, (y-modf)/err, emabv]
+			else:
+				return [status, (y-modf)/err]
 
 	# Now for the fitting code
 	def main(self):
@@ -365,13 +583,32 @@ class ClassMain:
 			errf = np.append(errf, self._fluefit[sp])
 		# Load the parameter information array
 		parinfo, self._levadd = alload.load_parinfo(self)
+		# Load parameter influence
+		self._pinfl = alload.load_par_influence(self, self._modpass['p0'])
 		# Sub-pixellate the spectrum
 		self._wavespx, self._contspx, self._zerospx, self._posnspx, self._nexbins = alload.load_subpixels(self, self._modpass['p0'])
+		# If there are some linked parameters, apply the links here
+		npar = len(self._modpass['p0'])
+		self._ptied = []
+		lnkcnt=0
+		for i in range(npar):
+			if (parinfo[i].has_key('tied')):
+				self._ptied.append(parinfo[i]['tied'].replace("numpy","np"))
+				self._modpass['mlnk'].append([-2-lnkcnt,parinfo[i]['tied'].replace("numpy","np")])
+				lnkcnt += 1
+			else: self._ptied.append('')
+		self._qanytied = 0
+		for i in range(npar):
+			self._ptied[i] = self._ptied[i].strip()
+			if self._ptied[i] != '':
+				self._qanytied = 1
+		if self._qanytied: self._modpass['p0'] = alload.load_tied(self._modpass['p0'], self._ptied)
 		# NOW PREPARE TO FIT THE DATA!
 		fdict = self.__dict__#.copy()
 		fa = {'x':wavf, 'y':fluf, 'err':errf, 'fdict':fdict}
 		# Calculate the initial Chi-Squared
 		msgs.info("Calculating the starting chi-squared",verbose=self._argflag['out']['verbose'])
+		# Calculate the starting function
 		start_func = self.myfunct(self._modpass['p0'],output=2)
 		if not self._argflag['generate']['data'] and self._argflag['sim']['beginfrom'] == "":
 			self._chisq_init = np.sum(((fluf-start_func)/errf)**2)
@@ -433,23 +670,27 @@ class ClassMain:
 				# Fit this iteration
 				m = alfit(myfunct_wrap, self._modpass['p0'], parinfo=parinfo, functkw=fa,
 						verbose=self._argflag['out']['verbose'], modpass=self._modpass, miniter=self._argflag['chisq']['miniter'], maxiter=self._argflag['chisq']['maxiter'],
-						ftol=self._argflag['chisq']['ftol'], gtol=self._argflag['chisq']['gtol'], xtol=self._argflag['chisq']['xtol'],
+						atol=self._argflag['chisq']['atol'], ftol=self._argflag['chisq']['ftol'], gtol=self._argflag['chisq']['gtol'], xtol=self._argflag['chisq']['xtol'],
 						ncpus=self._argflag['run']['ncpus'], fstep=self._argflag['chisq']['fstep'],limpar=self._argflag['run']['limpar'])
 				model = self.myfunct(m.params, output=2)
 				# Pass the fitted information to the user module and obtain and updated model and completion status
 				newmodln = alsave.modlines(self, m.params, self._modpass, verbose=self._argflag['out']['verbose'])
-				modlines, complete = itermod.loader(self, idtxt, newmodln, m.params, model=model)
+				newmerln = alsave.modlines(self, m.perror, self._modpass, verbose=self._argflag['out']['verbose'])
+				modlines, complete = itermod.loader(self, idtxt, newmodln, newmerln, m, model=model)
 				if not complete: # then update the appropriate variables
 					self._modlines = modlines
 					# Reload the new model
 					self._modpass = alload.load_model(self, self._modlines)
 					# Reload the parameter information array
 					parinfo, self._levadd = alload.load_parinfo(self)
+					# Reload parameter influence
+					self._pinfl = alload.load_par_influence(self, self._modpass['p0'])
 					# Re-sub-pixellate the spectrum
-					self._wavespx, self._posnspx, self._nexbins = alload.load_subpixels(self, self._modpass['p0'])
+					self._wavespx, self._contspx, self._zerospx, self._posnspx, self._nexbins = alload.load_subpixels(self, self._modpass['p0'])
 					# Update the parameter dictionary
 					fa['fdict'] = self.__dict__
 					iternum += 1
+			self._fitresults = m
 			self._tend=time.time()
 		elif self._argflag['generate']['data']:
 			# Save the generated data
@@ -465,7 +706,7 @@ class ClassMain:
 			msgs.info("Commencing chi-squared minimisation",verbose=self._argflag['out']['verbose'])
 			m = alfit(myfunct_wrap, self._modpass['p0'], parinfo=parinfo, functkw=fa,
 						verbose=self._argflag['out']['verbose'], modpass=self._modpass, miniter=self._argflag['chisq']['miniter'], maxiter=self._argflag['chisq']['maxiter'],
-						ftol=self._argflag['chisq']['ftol'], gtol=self._argflag['chisq']['gtol'], xtol=self._argflag['chisq']['xtol'],
+						atol=self._argflag['chisq']['atol'], ftol=self._argflag['chisq']['ftol'], gtol=self._argflag['chisq']['gtol'], xtol=self._argflag['chisq']['xtol'],
 						ncpus=self._argflag['run']['ncpus'], fstep=self._argflag['chisq']['fstep'],limpar=self._argflag['run']['limpar'])
 			self._tend=time.time()
 			niter=m.niter
@@ -487,6 +728,7 @@ class ClassMain:
 			# If the user just wants to fit the data and return, do so.
 			if self._fitonly:
 				self._fitresults = m
+				model = self.myfunct(m.params, output=1)
 				return self
 			# Otherwise, do everything else
 			if self._argflag['run']['convergence']:
@@ -499,13 +741,14 @@ class ClassMain:
 					mt = copy.deepcopy(m) # The testing set of parameters
 					while True:
 						if mpars.status != 5: # If the maximum number of iterations was reached, don't lower the tolerance
+							self._argflag['chisq']['atol'] /= 10.0
 							self._argflag['chisq']['ftol'] /= 10.0
 							self._argflag['chisq']['gtol'] /= 10.0
 							self._argflag['chisq']['xtol'] /= 10.0
 							lowby -= 1
 						mc = alfit(myfunct_wrap, mpars.params, parinfo=parinfo, functkw=fa,
 								verbose=self._argflag['out']['verbose'], modpass=self._modpass, miniter=self._argflag['chisq']['miniter'], maxiter=self._argflag['chisq']['maxiter'],
-								ftol=self._argflag['chisq']['ftol'], gtol=self._argflag['chisq']['gtol'], xtol=self._argflag['chisq']['xtol'],
+								atol=self._argflag['chisq']['atol'], ftol=self._argflag['chisq']['ftol'], gtol=self._argflag['chisq']['gtol'], xtol=self._argflag['chisq']['xtol'],
 								ncpus=self._argflag['run']['ncpus'], fstep=self._argflag['chisq']['fstep'],limpar=self._argflag['run']['limpar'], convtest=True)
 						# Update parameters
 						mpars = copy.deepcopy(mc)
@@ -623,7 +866,7 @@ class ClassMain:
 
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
-def alis(modelfile=None, parlines=[], datlines=[], modlines=[], data=None, fitonly=False, verbose=-1):
+def alis(modelfile=None, parlines=[], datlines=[], modlines=[], lnklines=[], data=None, fitonly=False, verbose=-1):
 	"""
 	modelfile : This is the name of a model file
 	lines : This is a three element list of the form [parlines, datlines, modlines]
@@ -634,11 +877,11 @@ def alis(modelfile=None, parlines=[], datlines=[], modlines=[], data=None, fiton
 	debug = True
 	if debug:
 		argflag = alload.optarg(os.path.realpath(__file__), verbose=verbose)
-		return ClassMain(argflag, parlines=parlines, datlines=datlines, modlines=modlines, modelfile=modelfile, data=data, fitonly=fitonly, verbose=verbose)
+		return ClassMain(argflag, parlines=parlines, datlines=datlines, modlines=modlines, lnklines=lnklines, modelfile=modelfile, data=data, fitonly=fitonly, verbose=verbose)
 	else:
 		try:
 			argflag = alload.optarg(os.path.realpath(__file__), verbose=verbose)
-			return ClassMain(argflag, parlines=parlines, datlines=datlines, modlines=modlines, modelfile=modelfile, data=data, fitonly=fitonly, verbose=verbose)
+			return ClassMain(argflag, parlines=parlines, datlines=datlines, modlines=modlines, lnklines=lnklines, modelfile=modelfile, data=data, fitonly=fitonly, verbose=verbose)
 		except Exception:
 			# There is a bug in the code, print the file and line number of the error.
 			et, ev, tb = sys.exc_info()
@@ -655,13 +898,14 @@ def initialise(alispath, verbose=-1):
 	slf = ClassMain(argflag,getinst=True)
 	slf._argflag = argflag
 	slf._atomic = alload.load_atomic(slf)
+	slf._isonefits = False
 	slf._function=alfunc_base.call(getfuncs=True, verbose=slf._argflag['out']['verbose'])
 	slf._funccall=alfunc_base.call(verbose=slf._argflag['out']['verbose'])
 	slf._funcinst=alfunc_base.call(prgname=slf._argflag['run']['prognm'], getinst=True, verbose=slf._argflag['out']['verbose'],atomic=slf._atomic)
 	return slf
 
 if __name__ == "__main__":
-	debug = False
+	debug = True
 	if debug:
 		msgs.bug("Read in resolution from column of data")
 		msgs.bug("With voigt function, if the user says to put an O I profile in specid A, make sure there is actually an O I line in specid A.")

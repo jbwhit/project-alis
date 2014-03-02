@@ -63,11 +63,13 @@ class Gaussian(alfunc_base.Base) :
 		--------------------------------------------------------
 		"""
 		if   i == 0: pin = par
-		elif i == 1: pin = parb['ap_1a'] * (1.0 + par)
+		elif i == 1:
+			pin = parb['ap_1a'] * (1.0 + par)
 		elif i == 2: pin = parb['ap_2a'] * par/299792.458
+#		elif i == 2: pin = par
 		return pin
 
-	def set_vars(self, p, level, mp, ival, wvrng=[0.0,0.0], spid='None', levid=None, nexbin=None, getinfl=False):
+	def set_vars(self, p, level, mp, ival, wvrng=[0.0,0.0], spid='None', levid=None, nexbin=None, ddpid=None, getinfl=False):
 		"""
 		Return the parameters for a Gaussian function to be used by 'call'
 		The only thing that should be changed here is the parb values
@@ -77,14 +79,29 @@ class Gaussian(alfunc_base.Base) :
 		params=np.zeros(self._pnumr)
 		parinf=[]
 		for i in range(self._pnumr):
+			lnkprm = None			
 			parb = dict({'ap_1a':self._keywd['wave'], 'ap_2a':params[1]})
-			if mp['mtie'][ival][i] != -1:
+			if mp['mtie'][ival][i] >= 0:
 				getid = mp['tpar'][mp['mtie'][ival][i]][1]
+			elif mp['mtie'][ival][i] <= -2:
+				if len(mp['mlnk']) == 0:
+					lnkprm = mp['mpar'][ival][i]
+				else:
+					for j in range(len(mp['mlnk'])):
+						if mp['mlnk'][j][0] == mp['mtie'][ival][i]:
+							cmd = 'lnkprm = ' + mp['mlnk'][j][1]
+							exec(cmd)
+				levadd += 1
 			else:
 				getid = level+levadd
 				levadd+=1
-			params[i] = self.parin(i, p[getid], parb)
-			if mp['mfix'][ival][i] == 0: parinf.append(getid)
+			if lnkprm is None:
+				params[i] = self.parin(i, p[getid], parb)
+				if mp['mfix'][ival][i] == 0: parinf.append(getid)
+			else:
+				params[i] = lnkprm
+		if ddpid is not None:
+			if ddpid not in parinf: return []
 		if nexbin is not None:
 			if params[2] == 0.0: msgs.error("Cannot calculate "+self._idstr+" subpixellation -- width = 0.0")
 			if nexbin[0] == "km/s": return params, int(round(parb['ap_2a']*nexbin[1]/(299792.458*params[2]) + 0.5))
