@@ -414,7 +414,7 @@ def load_data(slf, datlines, data=None):
 	specid=np.array([])
 	slf._snipid=[]
 	datopt = dict({'specid':[],'fitrange':[],'plotone':[],'nsubpix':[],'bintype':[],'columns':[],'systematics':[],'systmodule':[],'label':[]})
-	keywords = ['specid','fitrange','systematics','systmodule','resolution','columns','plotone','nsubpix','bintype','loadall','label']
+	keywords = ['specid','fitrange','systematics','systmodule','resolution','shift','columns','plotone','nsubpix','bintype','loadall','label']
 	colallow = np.array(['wave','flux','error','continuum','zerolevel','fitrange','systematics','resolution'])
 	columns  = np.array(['wave','flux','error'])
 	systload = [None, 'continuumpoly']
@@ -499,7 +499,7 @@ def load_data(slf, datlines, data=None):
 			if 'None' not in specid: specid = np.append(specid, 'None')
 			slf._snipid.append('None')
 	# Prepare the data arrays
-	snipnames, resn, posnfull, posnfit, plotone = [], [], [], [], []
+	snipnames, resn, shft, posnfull, posnfit, plotone = [], [], [], [], [], []
 	wavefull, fluxfull, fluefull, contfull, zerofull, systfull = [], [], [], [], [], []
 	wavefit, fluxfit, fluefit, contfit, zerofit = [], [], [], [], []
 	for i in range(specid.size):
@@ -521,6 +521,7 @@ def load_data(slf, datlines, data=None):
 		zerofull.append( np.array([]) )
 		systfull.append( np.array([]) )
 		resn.append( np.array([]) )
+		shft.append( np.array([]) )
 		posnfit.append([])
 		wavefit.append( np.array([]) )
 		fluxfit.append( np.array([]) )
@@ -549,7 +550,8 @@ def load_data(slf, datlines, data=None):
 		wavemin, wavemax = None, None
 		nspix = slf._argflag['run']['nsubpix']
 		bntyp = slf._argflag['run']['bintype']
-		tempresn = 'vfwhm(0.0)' # If Resolution not specified set it to zero and make it not tied to anything.
+		tempresn = 'vfwhm(0.0)' # If Resolution not specified set it to zero and make it not tied to anything
+		tempshft = 'none' # By default, apply no shift
 		systfile = ''
 		systval = None
 		if len(linspl) > 1:
@@ -565,6 +567,11 @@ def load_data(slf, datlines, data=None):
 						tempresn = kwdspl[1]
 					else:
 						tempresn = kwdspl[1]
+				elif kwdspl[0] == 'shift':
+					if kwdspl[1].lower() == 'none':
+						tempshft = 'none'
+					else:
+						tempshft = kwdspl[1]
 				elif kwdspl[0] == 'nsubpix':
 					if int(kwdspl[1]) > 0: nspix = int(kwdspl[1])
 					else: msgs.error("nsubpix must be greater than 0")
@@ -649,6 +656,7 @@ def load_data(slf, datlines, data=None):
 		# Store the filename for later
 		snipnames[sind].append(filename)
 		resn[sind] = np.append(resn[sind], tempresn)
+		shft[sind] = np.append(shft[sind], tempshft)
 		datopt['specid'][sind].append(specidtxt)
 		datopt['plotone'][sind].append(setplot)
 		datopt['label'][sind].append(uselabel)
@@ -704,7 +712,7 @@ def load_data(slf, datlines, data=None):
 	for i in range(specid.size):
 		posnfull[i].append(wavefull[i].size)
 	# Update the slf class with the loaded data
-	slf._snipnames, slf._resn, slf._datlines, slf._specid, slf._datopt = snipnames, resn, datlines, specid, datopt
+	slf._snipnames, slf._resn, slf._shft, slf._datlines, slf._specid, slf._datopt = snipnames, resn, shft, datlines, specid, datopt
 	slf._posnfull, slf._posnfit = posnfull, posnfit
 	slf._wavefull, slf._fluxfull, slf._fluefull, slf._contfull, slf._zerofull, slf._systfull = wavefull, fluxfull, fluefull, contfull, zerofull, systfull
 	slf._wavefit, slf._fluxfit, slf._fluefit, slf._contfit, slf._zerofit = wavefit, fluxfit, fluefit, contfit, zerofit
@@ -985,6 +993,22 @@ def load_model(slf, modlines, updateself=True):
 			parid.append(paridt)
 			pnumlin.append("resolution="+slf._resn[i][j])
 			cntr += 1
+	# Load the functional form of the shift
+	for i in range(len(slf._shft)):
+		for j in range(len(slf._shft[i])):
+			if slf._shft[i][j] == "none":
+				fspln, fsplv = "Ashift", "0.0"
+				modpass, paridt = slf._funccall[fspln].load(slf._funcinst[fspln], fsplv, cntr, modpass, slf._specid, forcefix=True)
+				modpass['emab'].append('sh')
+				parid.append(paridt)
+				#pnumlin.append("shift="+slf._shft[i][j])
+			else:
+				fspl = slf._shft[i][j].strip(')').split('(')
+				modpass, paridt = slf._funccall[fspl[0]].load(slf._funcinst[fspl[0]], fspl[1], cntr, modpass, slf._specid)
+				modpass['emab'].append('sh')
+				parid.append(paridt)
+				#pnumlin.append("shift="+slf._shft[i][j])
+			cntr += 1
 	# Now go through modlines again and make the appropriate changes to the modpass dictionary
 	cntr = 0
 	for i in range(0,len(modlines)):
@@ -1030,9 +1054,20 @@ def load_model(slf, modlines, updateself=True):
 			if slf._funcinst[mdlspl[0]]._limited[parid[cntr][j]][1] == (0 if modpass['mlim'][cntr][j][1]==None else 1) and slf._funcinst[mdlspl[0]]._limited[j][1] == modpass['mlim'][cntr][j][1]: pass
 			else: slf._funccall[mdlspl[0]].adjust_lim(slf._funcinst[mdlspl[0]], modpass, cntr, j, 1, parid[cntr][j])
 		cntr += 1
-	# Now go through and adjust the parameters of the FWHM
+	# Now go through and adjust the parameters of the instrument resolution
 	for i in range(len(slf._resn)):
 		for j in range(len(slf._resn[i])):
+			for k in range(len(parid[cntr])):
+				if slf._funcinst[fspl[0]]._fixpar[parid[cntr][k]] is None: pass
+				else: slf._funccall[fspl[0]].adjust_fix(slf._funcinst[fspl[0]], modpass, cntr, k, parid[cntr][k])
+				if slf._funcinst[fspl[0]]._limited[parid[cntr][k]][0] == (None if modpass['mlim'][cntr][k][0]==0 else 1): pass
+				else: slf._funccall[fspl[0]].adjust_lim(slf._funcinst[fspl[0]], modpass, cntr, k, 0, parid[cntr][k])
+				if slf._funcinst[fspl[0]]._limited[parid[cntr][k]][1] == (None if modpass['mlim'][cntr][k][1]==0 else 1): pass
+				else: slf._funccall[fspl[0]].adjust_lim(slf._funcinst[fspl[0]], modpass, cntr, k, 1, parid[cntr][k])
+			cntr += 1
+	# Now go through and adjust the parameters of the shift
+	for i in range(len(slf._shft)):
+		for j in range(len(slf._shft[i])):
 			for k in range(len(parid[cntr])):
 				if slf._funcinst[fspl[0]]._fixpar[parid[cntr][k]] is None: pass
 				else: slf._funccall[fspl[0]].adjust_fix(slf._funcinst[fspl[0]], modpass, cntr, k, parid[cntr][k])
@@ -1252,6 +1287,7 @@ def load_onefits(slf,loadname):
 def load_subpixels(slf, parin):
 	nexbins = []
 	modtyp=[[] for all in slf._posnfull]
+	shind = np.where(np.array(slf._modpass['emab'])=='sh')[0][0]
 	# Find narrowest profile in the model
 	for sp in range(len(slf._posnfull)):
 		lastemab, iea = ['' for all in slf._posnfull[sp][:-1]], [-1 for all in slf._posnfull[sp][:-1]]
@@ -1259,10 +1295,16 @@ def load_subpixels(slf, parin):
 		for sn in range(len(slf._posnfull[sp])-1):
 			ll = slf._posnfull[sp][sn]
 			lu = slf._posnfull[sp][sn+1]
-			wvrng = [slf._wavefull[sp][ll:lu].min(),slf._wavefull[sp][ll:lu].max()]
+			shmtyp = slf._modpass['mtyp'][shind]
+			slf._funcinst[shmtyp]._keywd = slf._modpass['mkey'][shind]
+			shparams = slf._funccall[shmtyp].set_vars(slf._funcinst[shmtyp], parin, slf._levadd[shind], slf._modpass, shind)
+			wvrngt = slf._funccall[shmtyp].call_CPU(slf._funcinst[shmtyp], slf._wavefull[sp][ll:lu], shparams)
+			shind += 1
+			wvrng = [wvrngt.min(),wvrngt.max()]
+#			wvrng = [slf._wavefull[sp][ll:lu].min(),slf._wavefull[sp][ll:lu].max()]
 			modtyp[sp].append([])
 			for i in range(0,len(slf._modpass['mtyp'])):
-				if slf._modpass['emab'][i] in ['cv','va']: continue # This is a convolution or variable (not emission or absorption)
+				if slf._modpass['emab'][i] in ['cv','va','sh']: continue # This is a convolution or variable (not emission or absorption)
 				if slf._specid[sp] not in slf._modpass['mkey'][i]['specid']: continue # Don't apply this model to this data
 				if lastemab[sn] == '' and slf._modpass['emab'][i] != 'em':
 					msgs.error("Model for specid="+slf._snipid[sp]+" must specify emission before absorption")
@@ -1344,16 +1386,23 @@ def load_par_influence(slf, parin):
 	uinfl = np.array([],dtype=np.int)
 	modtyp=[[] for all in slf._posnfull]
 	# Find the model parameters that influence a given sp+sn
+	shind = np.where(np.array(slf._modpass['emab'])=='sh')[0][0]
 	for sp in range(0,len(slf._posnfull)):
 		lastemab, iea = ['' for all in slf._posnfull[sp][:-1]], [-1 for all in slf._posnfull[sp][:-1]]
 		pinfl.append([np.array([],dtype=np.int) for all in slf._posnfull[sp][:-1]])
 		for sn in range(len(slf._posnfull[sp])-1):
 			ll = slf._posnfull[sp][sn]
 			lu = slf._posnfull[sp][sn+1]
-			wvrng = [slf._wavefull[sp][ll:lu].min(),slf._wavefull[sp][ll:lu].max()]
+			shmtyp = slf._modpass['mtyp'][shind]
+			slf._funcinst[shmtyp]._keywd = slf._modpass['mkey'][shind]
+			shparams = slf._funccall[shmtyp].set_vars(slf._funcinst[shmtyp], parin, slf._levadd[shind], slf._modpass, shind)
+			wvrngt = slf._funccall[shmtyp].call_CPU(slf._funcinst[shmtyp], slf._wavefull[sp][ll:lu], shparams)
+			shind += 1
+			wvrng = [wvrngt.min(),wvrngt.max()]
+#			wvrng = [slf._wavefull[sp][ll:lu].min(),slf._wavefull[sp][ll:lu].max()]
 			modtyp[sp].append([])
 			for i in range(0,len(slf._modpass['mtyp'])):
-				if slf._modpass['emab'][i] == 'cv': continue # This is a convolution (not emission or absorption)
+				if slf._modpass['emab'][i] in ['cv','sh']: continue # This is a convolution or a shift (not emission or absorption)
 				if slf._specid[sp] not in slf._modpass['mkey'][i]['specid']: continue # Don't apply this model to this data
 				if lastemab[sn] == '' and slf._modpass['emab'][i] != 'em':
 					if slf._modpass['emab'][i] != 'va':
@@ -1380,6 +1429,16 @@ def load_par_influence(slf, parin):
 			mtyp = slf._modpass['mtyp'][cvind]
 			params, infv = slf._funccall[mtyp].set_vars(slf._funcinst[mtyp], parin, slf._levadd[cvind], slf._modpass, cvind, getinfl=True)
 			cvind += 1
+			for j in infv:
+				if j not in pinfl[sp][sn] and not inlinks(j): pinfl[sp][sn] = np.append(pinfl[sp][sn],j)
+				if j not in uinfl and not inlinks(j): uinfl = np.append(uinfl,j)
+	# Test if a shift influences the result of a given sp+sn
+	shind = np.where(np.array(slf._modpass['emab'])=='sh')[0][0]
+	for sp in range(len(slf._posnfull)):
+		for sn in range(len(slf._posnfull[sp])-1):
+			mtyp = slf._modpass['mtyp'][shind]
+			params, infv = slf._funccall[mtyp].set_vars(slf._funcinst[mtyp], parin, slf._levadd[shind], slf._modpass, shind, getinfl=True)
+			shind += 1
 			for j in infv:
 				if j not in pinfl[sp][sn] and not inlinks(j): pinfl[sp][sn] = np.append(pinfl[sp][sn],j)
 				if j not in uinfl and not inlinks(j): uinfl = np.append(uinfl,j)

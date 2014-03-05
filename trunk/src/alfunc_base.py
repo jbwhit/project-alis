@@ -1,5 +1,7 @@
 import numpy as np
+import traceback
 import almsgs
+import sys
 msgs=almsgs.msgs()
 
 class Base :
@@ -625,6 +627,8 @@ import alfunc_voigt
 import alfunc_afwhm
 import alfunc_vfwhm
 import alfunc_vsigma
+import alshift
+import alfunc_user
 
 """
 Initialises the functions that are used in this file.
@@ -636,6 +640,7 @@ def call(prgname="",getfuncs=False,getinst=False,atomic=None,verbose=2):
 	sendatomic = ['voigt', 'lineemission']
 	# Add your new function to the following:
 	fd = dict({ 'Afwhm'          : alfunc_afwhm.AFWHM,
+				'Ashift'         : alshift.Ashift,
 				'brokenpowerlaw' : alfunc_brokenpowerlaw.BrokenPowerLaw,
 				'chebyshev'      : alfunc_chebyshev.Chebyshev,
 				'constant'       : alfunc_constant.Constant,
@@ -650,8 +655,44 @@ def call(prgname="",getfuncs=False,getinst=False,atomic=None,verbose=2):
 				'variable'       : alfunc_variable.Variable,
 				'vfwhm'          : alfunc_vfwhm.vFWHM,
 				'voigt'          : alfunc_voigt.Voigt,
+				'vshift'         : alshift.vshift,
 				'vsigma'         : alfunc_vsigma.vSigma
 				})
+
+	# Load the user-specified functions
+	msgs.info("Loading user functions")
+	try:
+		usr_fd, usr_atm = alfunc_user.load_user_functions()
+	except Exception:
+		msgs.warn("There appears to be a problem loading the user functions")
+		et, ev, tb = sys.exc_info()
+		while tb:    
+			co = tb.tb_frame.f_code
+			filename = str(co.co_filename)
+			line_no =  str(traceback.tb_lineno(tb))
+			tb = tb.tb_next
+		filename=filename.split('/')[-1]
+		msgs.bug("A bug has been spotted on Line "+line_no+" of "+filename+" with error:"+msgs.newline()+str(ev))
+		sys.exit()
+
+	# Incorporate the user-defined functions
+	kvals = usr_fd.keys()
+	if len(kvals) == 0:
+		msgs.info("No user functions to load!")
+	fdk = fd.keys()
+	# Check there is no overlap in function names
+	for i in range(len(kvals)):
+		if kvals[i] in fdk:
+			msgs.error("There is already a built-in function called '{0:s}'".format(kvals[i])+msgs.newline()+"Please give your function a new name.")
+		else:
+			fd[kvals[i]] = usr_fd[kvals[i]]
+			msgs.info("Successfully loaded user function: {0:s}".format(kvals[i]))
+	for i in range(len(usr_atm)):
+		if usr_atm[i] in kvals:
+			sendatomic.append(usr_atm[i])
+		else:
+			msgs.error("with user-defined function {0:s}".format(usr_atm[i])+msgs.newline()+"Atomic data request for a function that does not exist!")
+
 	# Don't touch anything below
 	if getfuncs and getinst:
 		msgs.bug("Two keywords in alfunc_base.py unexpectedly set to 'True' ...", verbose=2)

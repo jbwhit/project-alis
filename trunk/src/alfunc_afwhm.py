@@ -150,7 +150,7 @@ class AFWHM(alfunc_base.Base) :
 		wmax = fitrng[1]*(1.0 + Nsig*sigd)
 		return wmin, wmax
 
-	def load(self, instr, cntr, mp, specid):
+	def load(self, instr, cntr, mp, specid, forcefix=False):
 		"""
 		Load the parameters in the input model file
 		--------------------------------------------------------
@@ -173,10 +173,13 @@ class AFWHM(alfunc_base.Base) :
 			inval=float(ival.rstrip(tieval))
 			if len(tieval) == 0: # Parameter is not tied
 				mps['mtie'][cntr].append(-1)
-				mps['mfix'][cntr].append(0)
+				if forcefix:
+					mps['mfix'][cntr].append(1)
+				else:
+					mps['mfix'][cntr].append(0)
 			else: # parameter is tied
 				# Determine if this parameter is fixed
-				if tieval[0].isupper(): mps['mfix'][cntr].append(1)
+				if tieval[0].isupper() or forcefix: mps['mfix'][cntr].append(1)
 				else: mps['mfix'][cntr].append(0)
 				# Check if this tieval has been used before
 				if len(mps['tpar']) == 0: # If it's the first known tied parameter in the model
