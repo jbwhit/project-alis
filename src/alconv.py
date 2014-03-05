@@ -13,8 +13,7 @@ def print_model(diff, mp, thresh, verbose=2):
 	funccall=alfunc_base.call(verbose=verbose)
 	level=0
 	convstring = ""
-	donecv=[]
-	donezl=[]
+	donecv, donesh, donezl = [], [], []
 	lastemab=""
 	for i in range(len(mp['mtyp'])):
 		#if errs is not None and mp['emab'][i] == "cv": continue
@@ -22,14 +21,16 @@ def print_model(diff, mp, thresh, verbose=2):
 		if mp['emab'][i] != lastemab:
 			if   mp['emab'][i]=="em": aetag = "emission"
 			elif mp['emab'][i]=="ab": aetag = "absorption"
-			elif mp['emab'][i]=="cv": aetag = "convolution"
+			elif mp['emab'][i]=="cv": aetag = "Convolution"
+			elif mp['emab'][i]=="sh": aetag = "Shift"
 			elif mp['emab'][i]=="zl": aetag = "zerolevel"
 			convstring += "#"+aetag+"\n"
 			lastemab = mp['emab'][i]
 		funcinst[mtyp]._keywd = mp['mkey'][i]
 		outstr, cnvstr, level = funccall[mtyp].parout(funcinst[mtyp], diff, mp, i, level, conv=thresh)
-		if outstr in donecv or outstr in donezl: continue
+		if outstr in donecv or outstr in donesh or outstr in donezl: continue
 		if mp['emab'][i] == "cv": donecv.append(outstr) # Make sure we don't print convolution more than once.
+		if mp['emab'][i] == "sh": donesh.append(outstr) # Make sure we don't print shifts more than once.
 		if mp['emab'][i] == "zl": donezl.append(outstr) # Make sure we don't print zerolevel more than once.
 		convstring += cnvstr
 	return convstring
