@@ -70,7 +70,7 @@ class alfit(object):
 #	blas_enorm64, = scipy.linalg.get_blas_funcs(['nrm2'],numpy.array([0],dtype=numpy.float64))
 
 
-	def __init__(self, fcn, xall=None, functkw={}, parinfo=None,
+	def __init__(self, fcn, xall=None, functkw={}, funcarray=[None, None, None], parinfo=None,
 				 ftol=1.e-10, xtol=1.e-10, gtol=1.e-10, atol=1.e-10,
 				 damp=0., miniter=0, maxiter=200, factor=100., nprint=1,
 				 iterfunct='default', iterkw={}, nocovar=0, limpar=False,
@@ -540,7 +540,7 @@ class alfit(object):
 					dof = numpy.max([len(fvec) - len(x), 0])
 					status = iterfunct(fcn, self.params, self.niter, self.fnorm**2,
 					  functkw=functkw, parinfo=parinfo, verbose=verbose,
-					  modpass=modpass, convtest=convtest, dof=dof, **iterkw)
+					  modpass=modpass, convtest=convtest, dof=dof, funcarray=funcarray, **iterkw)
 					if status is not None:
 						self.status = status
 
@@ -1003,7 +1003,7 @@ class alfit(object):
 	def defiter(self, fcn, x, iter, fnorm=None, functkw=None,
 					   verbose=2, iterstop=None, parinfo=None,
 					   format=None, pformat='%.10g', dof=1,
-					   modpass=None, convtest=False):
+					   modpass=None, convtest=False, funcarray=[None,None,None]):
 
 		if self.debug:
 			print 'Entering defiter...'
@@ -1021,7 +1021,7 @@ class alfit(object):
 		if verbose == 1 or modpass == None:
 			return
 		else:
-			prstr, cvstr = print_model(x, modpass, verbose=verbose)
+			prstr, cvstr = print_model(x, modpass, verbose=verbose, funcarray=funcarray)
 			print prstr+cvstr[0]+cvstr[2]
 			return 0
 

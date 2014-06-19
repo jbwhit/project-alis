@@ -680,13 +680,13 @@ def load_data(slf, datlines, data=None):
 			fspl = tempresn.strip(')').split('(')
 			pars=fspl[1].split(',')
 			wavemin, wavemax = np.min(wavein[wf]), np.max(wavein[wf])
-			wvmnres, wvmxres = slf._funccall[fspl[0]].getminmax(slf._funcinst[fspl[0]], pars, [wavemin,wavemax])
+			wvmnres, wvmxres = slf._funcarray[1][fspl[0]].getminmax(slf._funcarray[2][fspl[0]], pars, [wavemin,wavemax])
 			w  = np.where((wavein >= wvmnres) & (wavein <= wvmxres))
 		else:
 			wf = np.where((wavein >= wavemin) & (wavein <= wavemax))
 			fspl = tempresn.strip(')').split('(')
 			pars=fspl[1].split(',')
-			wvmnres, wvmxres = slf._funccall[fspl[0]].getminmax(slf._funcinst[fspl[0]], pars, [wavemin,wavemax])
+			wvmnres, wvmxres = slf._funcarray[1][fspl[0]].getminmax(slf._funcarray[2][fspl[0]], pars, [wavemin,wavemax])
 			w  = np.where((wavein >= wvmnres) & (wavein <= wvmxres))
 		if loadall: w = np.arange(wavein.size) # If this keyword was set, load all data from this file
 		if np.size(w) == 0:
@@ -970,9 +970,9 @@ def load_model(slf, modlines, updateself=True):
 			emabtag = 'zl'
 			emab.append('zl')
 			continue
-		elif mdlspl[0] in slf._function: # Load the model parameters
+		elif mdlspl[0] in slf._funcarray[0]: # Load the model parameters
 			instr = nocoms.strip().lstrip(mdlspl[0]).strip()
-			modpass, paridt = slf._funccall[mdlspl[0]].load(slf._funcinst[mdlspl[0]], instr, cntr, modpass, slf._specid)
+			modpass, paridt = slf._funcarray[1][mdlspl[0]].load(slf._funcarray[2][mdlspl[0]], instr, cntr, modpass, slf._specid)
 			for j in range(len(pnumlin),len(modpass['p0'])): pnumlin.append(i) # Store which element of modlines each parameter comes from
 			parid.append(paridt)
 			if mdlspl[0] not in funcused: funcused.append(mdlspl[0])
@@ -988,7 +988,7 @@ def load_model(slf, modlines, updateself=True):
 	for i in range(len(slf._resn)):
 		for j in range(len(slf._resn[i])):
 			fspl = slf._resn[i][j].strip(')').split('(')
-			modpass, paridt = slf._funccall[fspl[0]].load(slf._funcinst[fspl[0]], fspl[1], cntr, modpass, slf._specid)
+			modpass, paridt = slf._funcarray[1][fspl[0]].load(slf._funcarray[2][fspl[0]], fspl[1], cntr, modpass, slf._specid)
 			modpass['emab'].append('cv')
 			parid.append(paridt)
 			pnumlin.append("resolution="+slf._resn[i][j])
@@ -998,19 +998,21 @@ def load_model(slf, modlines, updateself=True):
 		for j in range(len(slf._shft[i])):
 			if slf._shft[i][j] == "none":
 				fspln, fsplv = "Ashift", "0.0"
-				modpass, paridt = slf._funccall[fspln].load(slf._funcinst[fspln], fsplv, cntr, modpass, slf._specid, forcefix=True)
+				modpass, paridt = slf._funcarray[1][fspln].load(slf._funcarray[2][fspln], fsplv, cntr, modpass, slf._specid, forcefix=True)
 				modpass['emab'].append('sh')
 				parid.append(paridt)
 				#pnumlin.append("shift="+slf._shft[i][j])
 			else:
 				fspl = slf._shft[i][j].strip(')').split('(')
-				modpass, paridt = slf._funccall[fspl[0]].load(slf._funcinst[fspl[0]], fspl[1], cntr, modpass, slf._specid)
+				modpass, paridt = slf._funcarray[1][fspl[0]].load(slf._funcarray[2][fspl[0]], fspl[1], cntr, modpass, slf._specid)
 				modpass['emab'].append('sh')
 				parid.append(paridt)
 				#pnumlin.append("shift="+slf._shft[i][j])
 			cntr += 1
 	# Now go through modlines again and make the appropriate changes to the modpass dictionary
 	cntr = 0
+	fixparid=[]
+	limparid=[]
 	for i in range(0,len(modlines)):
 		if len(modlines[i].strip()) == 0: continue # Nothing on a line
 		nocoms = modlines[i].lstrip().split('#')[0] # Remove everything on a line after the first instance of a comment symbol: #
@@ -1020,62 +1022,158 @@ def load_model(slf, modlines, updateself=True):
 		if mdlspl[0] == 'fix':
 			if len(mdlspl) != 4: msgs.error("Keyword 'fix' requires three arguments on line -"+msgs.newline()+modlines[i])
 			# Make some changes to the function instance based on input file
-			if mdlspl[1] not in slf._function: msgs.error("Keyword 'fix' does not accept the parameter "+mdlspl[1]+" on line -"+msgs.newline()+modlines[i])
-			if mdlspl[2] not in slf._funcinst[mdlspl[1]]._parid: msgs.error("Keyword "+mdlspl[1]+" does not accept the parameter "+mdlspl[2]+" on line -"+msgs.newline()+modlines[i])
-			find = np.where(np.array(slf._funcinst[mdlspl[1]]._parid)==mdlspl[2])[0][0]
-			if mdlspl[3] in ['None','none','NONE']: slf._funcinst[mdlspl[1]]._fixpar[find] = None
-			else: slf._funcinst[mdlspl[1]]._fixpar[find] = mdlspl[3]
-			continue
+			if mdlspl[1] == "param": # A given parameter is to have limits
+				fixparid.append(mdlspl)
+				continue
+			else:
+				if mdlspl[1] not in slf._funcarray[0]: msgs.error("Keyword 'fix' does not accept the parameter "+mdlspl[1]+" on line -"+msgs.newline()+modlines[i])
+				if mdlspl[2] not in slf._funcarray[2][mdlspl[1]]._parid: msgs.error("Keyword "+mdlspl[1]+" does not accept the parameter "+mdlspl[2]+" on line -"+msgs.newline()+modlines[i])
+				find = np.where(np.array(slf._funcarray[2][mdlspl[1]]._parid)==mdlspl[2])[0][0]
+				if mdlspl[3] in ['None','none','NONE']: slf._funcarray[2][mdlspl[1]]._fixpar[find] = None
+				else: slf._funcarray[2][mdlspl[1]]._fixpar[find] = mdlspl[3]
+				continue
 		elif mdlspl[0] == 'lim':
 			if len(mdlspl) != 4: msgs.error("Keyword 'lim' requires three arguments on line -"+msgs.newline()+modlines[i])
-			# Make some changes to the function instance based on input file
-			if mdlspl[1] not in slf._function: msgs.error("Keyword 'lim' does not accept the parameter "+mdlspl[1]+" on line -"+msgs.newline()+modlines[i])
-			if mdlspl[2] not in slf._funcinst[mdlspl[1]]._parid: msgs.error("Keyword "+mdlspl[1]+" does not accept the parameter "+mdlspl[2]+" on line -"+msgs.newline()+modlines[i])
-			find = np.where(np.array(slf._funcinst[mdlspl[1]]._parid)==mdlspl[2])[0][0]
-			limspl=mdlspl[3].strip('[]').split(',')
-			if len(limspl) != 2: msgs.error("Keyword 'lim' only accepts a two element array on line -"+msgs.newline()+modlines[i])
-			for j in range(2):
-				try:
-					if limspl[j] in ['None','none','NONE']:
-						slf._funcinst[mdlspl[1]]._limited[find][j] = 0
-						slf._funcinst[mdlspl[1]]._limits[find][j]  = 0.0
-					else:
-						slf._funcinst[mdlspl[1]]._limited[find][j] = 1
-						slf._funcinst[mdlspl[1]]._limits[find][j]  = np.float64(limspl[j])
-				except:
-					msgs.error("Keyword 'lim' must be a floating point number or 'None' on line -"+msgs.newline()+modlines[i])
-			continue
+			if mdlspl[1] == "param": # A given parameter is to have limits
+				limparid.append(mdlspl)
+				continue
+			else:
+				# Make some changes to the function instance based on input file
+				if mdlspl[1] not in slf._funcarray[0]: msgs.error("Keyword 'lim' does not accept the parameter "+mdlspl[1]+" on line -"+msgs.newline()+modlines[i])
+				if mdlspl[2] not in slf._funcarray[2][mdlspl[1]]._parid: msgs.error("Keyword "+mdlspl[1]+" does not accept the parameter "+mdlspl[2]+" on line -"+msgs.newline()+modlines[i])
+				find = np.where(np.array(slf._funcarray[2][mdlspl[1]]._parid)==mdlspl[2])[0][0]
+				limspl=mdlspl[3].strip('[]').split(',')
+				if len(limspl) != 2: msgs.error("Keyword 'lim' only accepts a two element array on line -"+msgs.newline()+modlines[i])
+				for j in range(2):
+					try:
+						if limspl[j] in ['None','none','NONE']:
+							slf._funcarray[2][mdlspl[1]]._limited[find][j] = 0
+							slf._funcarray[2][mdlspl[1]]._limits[find][j]  = 0.0
+						else:
+							slf._funcarray[2][mdlspl[1]]._limited[find][j] = 1
+							slf._funcarray[2][mdlspl[1]]._limits[find][j]  = np.float64(limspl[j])
+					except:
+						msgs.error("Keyword 'lim' must be a floating point number or 'None' on line -"+msgs.newline()+modlines[i])
+				continue
 		# Adjust any parameters for these models
 		for j in range(len(parid[cntr])):
-			if slf._funcinst[mdlspl[0]]._fixpar[parid[cntr][j]] is None: pass
-			else: slf._funccall[mdlspl[0]].adjust_fix(slf._funcinst[mdlspl[0]], modpass, cntr, j, parid[cntr][j])
-			if slf._funcinst[mdlspl[0]]._limited[parid[cntr][j]][0] == (0 if modpass['mlim'][cntr][j][0]==None else 1) and slf._funcinst[mdlspl[0]]._limited[j][0] == modpass['mlim'][cntr][j][0]: pass
-			else: slf._funccall[mdlspl[0]].adjust_lim(slf._funcinst[mdlspl[0]], modpass, cntr, j, 0, parid[cntr][j])
-			if slf._funcinst[mdlspl[0]]._limited[parid[cntr][j]][1] == (0 if modpass['mlim'][cntr][j][1]==None else 1) and slf._funcinst[mdlspl[0]]._limited[j][1] == modpass['mlim'][cntr][j][1]: pass
-			else: slf._funccall[mdlspl[0]].adjust_lim(slf._funcinst[mdlspl[0]], modpass, cntr, j, 1, parid[cntr][j])
+			if slf._funcarray[2][mdlspl[0]]._fixpar[parid[cntr][j]] is None: pass
+			else: slf._funcarray[1][mdlspl[0]].adjust_fix(slf._funcarray[2][mdlspl[0]], modpass, cntr, j, parid[cntr][j])
+			if slf._funcarray[2][mdlspl[0]]._limited[parid[cntr][j]][0] == (0 if modpass['mlim'][cntr][j][0]==None else 1) and slf._funcarray[2][mdlspl[0]]._limited[j][0] == modpass['mlim'][cntr][j][0]: pass
+			else: slf._funcarray[1][mdlspl[0]].adjust_lim(slf._funcarray[2][mdlspl[0]], modpass, cntr, j, 0, parid[cntr][j])
+			if slf._funcarray[2][mdlspl[0]]._limited[parid[cntr][j]][1] == (0 if modpass['mlim'][cntr][j][1]==None else 1) and slf._funcarray[2][mdlspl[0]]._limited[j][1] == modpass['mlim'][cntr][j][1]: pass
+			else: slf._funcarray[1][mdlspl[0]].adjust_lim(slf._funcarray[2][mdlspl[0]], modpass, cntr, j, 1, parid[cntr][j])
 		cntr += 1
 	# Now go through and adjust the parameters of the instrument resolution
 	for i in range(len(slf._resn)):
 		for j in range(len(slf._resn[i])):
+			fspl = slf._resn[i][j].strip(')').split('(')
 			for k in range(len(parid[cntr])):
-				if slf._funcinst[fspl[0]]._fixpar[parid[cntr][k]] is None: pass
-				else: slf._funccall[fspl[0]].adjust_fix(slf._funcinst[fspl[0]], modpass, cntr, k, parid[cntr][k])
-				if slf._funcinst[fspl[0]]._limited[parid[cntr][k]][0] == (None if modpass['mlim'][cntr][k][0]==0 else 1): pass
-				else: slf._funccall[fspl[0]].adjust_lim(slf._funcinst[fspl[0]], modpass, cntr, k, 0, parid[cntr][k])
-				if slf._funcinst[fspl[0]]._limited[parid[cntr][k]][1] == (None if modpass['mlim'][cntr][k][1]==0 else 1): pass
-				else: slf._funccall[fspl[0]].adjust_lim(slf._funcinst[fspl[0]], modpass, cntr, k, 1, parid[cntr][k])
+				if slf._funcarray[2][fspl[0]]._fixpar[parid[cntr][k]] is None: pass
+				else: slf._funcarray[1][fspl[0]].adjust_fix(slf._funcarray[2][fspl[0]], modpass, cntr, k, parid[cntr][k])
+				if slf._funcarray[2][fspl[0]]._limited[parid[cntr][k]][0] == (None if modpass['mlim'][cntr][k][0]==0 else 1): pass
+				else: slf._funcarray[1][fspl[0]].adjust_lim(slf._funcarray[2][fspl[0]], modpass, cntr, k, 0, parid[cntr][k])
+				if slf._funcarray[2][fspl[0]]._limited[parid[cntr][k]][1] == (None if modpass['mlim'][cntr][k][1]==0 else 1): pass
+				else: slf._funcarray[1][fspl[0]].adjust_lim(slf._funcarray[2][fspl[0]], modpass, cntr, k, 1, parid[cntr][k])
 			cntr += 1
 	# Now go through and adjust the parameters of the shift
 	for i in range(len(slf._shft)):
 		for j in range(len(slf._shft[i])):
+			if slf._shft[i][j] == "none":
+				fspl = ["Ashift", 0.0]
+			else:
+				fspl = slf._shft[i][j].strip(')').split('(')
 			for k in range(len(parid[cntr])):
-				if slf._funcinst[fspl[0]]._fixpar[parid[cntr][k]] is None: pass
-				else: slf._funccall[fspl[0]].adjust_fix(slf._funcinst[fspl[0]], modpass, cntr, k, parid[cntr][k])
-				if slf._funcinst[fspl[0]]._limited[parid[cntr][k]][0] == (None if modpass['mlim'][cntr][k][0]==0 else 1): pass
-				else: slf._funccall[fspl[0]].adjust_lim(slf._funcinst[fspl[0]], modpass, cntr, k, 0, parid[cntr][k])
-				if slf._funcinst[fspl[0]]._limited[parid[cntr][k]][1] == (None if modpass['mlim'][cntr][k][1]==0 else 1): pass
-				else: slf._funccall[fspl[0]].adjust_lim(slf._funcinst[fspl[0]], modpass, cntr, k, 1, parid[cntr][k])
+				if slf._funcarray[2][fspl[0]]._fixpar[parid[cntr][k]] is None: pass
+				else: slf._funcarray[1][fspl[0]].adjust_fix(slf._funcarray[2][fspl[0]], modpass, cntr, k, parid[cntr][k])
+				if slf._funcarray[2][fspl[0]]._limited[parid[cntr][k]][0] == (None if modpass['mlim'][cntr][k][0]==0 else 1): pass
+				else: slf._funcarray[1][fspl[0]].adjust_lim(slf._funcarray[2][fspl[0]], modpass, cntr, k, 0, parid[cntr][k])
+				if slf._funcarray[2][fspl[0]]._limited[parid[cntr][k]][1] == (None if modpass['mlim'][cntr][k][1]==0 else 1): pass
+				else: slf._funcarray[1][fspl[0]].adjust_lim(slf._funcarray[2][fspl[0]], modpass, cntr, k, 1, parid[cntr][k])
 			cntr += 1
+	# Globally set the fixed and limited parameter values set by "fix param" and "lim param"
+	for i in range(len(fixparid)):
+		foundit=False
+		tparid=None
+		for j in range(len(modpass['tpar'])):
+			if modpass['tpar'][j][0]==fixparid[i][2]:
+				foundit=True
+				tparid=j
+				break
+		if not foundit: msgs.error("Could not fix parameter with tie id '{0:s}' -- '{0:s}' does not exist:".format(fixparid[i][2])+msgs.newline()+" ".join(fixparid[i]))
+		# Adjust modpass to reflect the fixed parameter
+		mlev=0
+		for m in range(len(modpass['mtie'])):
+			for j in range(len(modpass['mtie'][m])):
+				if modpass['mtie'][m][j]==tparid:
+					if fixparid[i][3].lower() == 'true': modpass['mfix'][m][j]=1
+					elif fixparid[i][3].lower() == 'false': modpass['mfix'][m][j]=0
+					else:
+						try:
+							modpass['mpar'][m][j]=float(fixparid[i][3])
+							modpass['mfix'][m][j]=1
+						except:
+							msgs.error("I could not fix the parameter value with tie {0:s}".format(fixparid[i][2])+msgs.newline()+"must be one of 'True', 'False', or a floating point number")
+				elif mlev==modpass['tpar'][tparid][1]:
+					if fixparid[i][3].lower() == 'true': modpass['mfix'][m][j]=1
+					elif fixparid[i][3].lower() == 'false': modpass['mfix'][m][j]=0
+					else:
+						try:
+							modpass['mpar'][m][j]=float(fixparid[i][3])
+							modpass['p0'][mlev]=float(fixparid[i][3])
+							modpass['mfix'][m][j]=1
+						except:
+							msgs.error("I could not fix the parameter value with tie {0:s}".format(fixparid[i][2])+msgs.newline()+"must be one of 'True', 'False', or a floating point number")
+					mlev += 1
+				elif modpass['mtie'][m][j] == -1:
+					mlev += 1
+	for i in range(len(limparid)):
+		foundit=False
+		tparid=None
+		for j in range(len(modpass['tpar'])):
+			if modpass['tpar'][j][0]==limparid[i][2]:
+				foundit=True
+				tparid=j
+		if not foundit: msgs.error("Could not limit parameter with tied id '{0:s}' -- '{0:s}' does not exist:".format(limparid[i][2])+msgs.newline()+" ".join(limparid[i]))
+		limspl=limparid[i][3].strip('[]').split(',')
+		# Adjust modpass to reflect the fixed parameter
+		mlev=0
+		for m in range(len(modpass['mtie'])):
+			for j in range(len(modpass['mtie'][m])):
+				if modpass['mtie'][m][j]==tparid:
+					# Set lower limit
+					if limspl[0].lower() == 'none': modpass['mlim'][m][j][0]=None
+					else:
+						try:
+							modpass['mlim'][m][j][0]=float(limspl[0])
+						except:
+							msgs.error("I could not limit the lower parameter value with tie {0:s}".format(limparid[i][2])+msgs.newline()+"check the form of the model line")
+					# Set upper limit
+					if limspl[1].lower() == 'none': modpass['mlim'][m][j][1]=None
+					else:
+						try:
+							modpass['mlim'][m][j][1]=float(limspl[1])
+						except:
+							msgs.error("I could not limit the lower parameter value with tie {0:s}".format(limparid[i][2])+msgs.newline()+"check the form of the model line")
+				elif mlev==modpass['tpar'][tparid][1]:
+					# Set lower limit
+					if limspl[0].lower() == 'none': modpass['mlim'][m][j][0]=None
+					else:
+						try:
+							modpass['mlim'][m][j][0]=float(limspl[0])
+						except:
+							msgs.error("I could not limit the lower parameter value with tie {0:s}".format(limparid[i][2])+msgs.newline()+"check the form of the model line")
+					# Set upper limit
+					if limspl[1].lower() == 'none': modpass['mlim'][m][j][1]=None
+					else:
+						try:
+							modpass['mlim'][m][j][1]=float(limspl[1])
+						except:
+							msgs.error("I could not limit the lower parameter value with tie {0:s}".format(limparid[i][2])+msgs.newline()+"check the form of the model line")
+					mlev += 1
+				elif modpass['mtie'][m][j] == -1:
+					mlev += 1
+	print modpass
 	msgs.info("Model loaded successfully",verbose=slf._argflag['out']['verbose'])
 	if updateself:
 		slf._emab = emab
@@ -1296,9 +1394,9 @@ def load_subpixels(slf, parin):
 			ll = slf._posnfull[sp][sn]
 			lu = slf._posnfull[sp][sn+1]
 			shmtyp = slf._modpass['mtyp'][shind]
-			slf._funcinst[shmtyp]._keywd = slf._modpass['mkey'][shind]
-			shparams = slf._funccall[shmtyp].set_vars(slf._funcinst[shmtyp], parin, slf._levadd[shind], slf._modpass, shind)
-			wvrngt = slf._funccall[shmtyp].call_CPU(slf._funcinst[shmtyp], slf._wavefull[sp][ll:lu], shparams)
+			slf._funcarray[2][shmtyp]._keywd = slf._modpass['mkey'][shind]
+			shparams = slf._funcarray[1][shmtyp].set_vars(slf._funcarray[2][shmtyp], parin, slf._levadd[shind], slf._modpass, shind)
+			wvrngt = slf._funcarray[1][shmtyp].call_CPU(slf._funcarray[2][shmtyp], slf._wavefull[sp][ll:lu], shparams)
 			shind += 1
 			wvrng = [wvrngt.min(),wvrngt.max()]
 #			wvrng = [slf._wavefull[sp][ll:lu].min(),slf._wavefull[sp][ll:lu].max()]
@@ -1317,8 +1415,8 @@ def load_subpixels(slf, parin):
 					modtyp[sp][sn][iea[sn]] = np.append(modtyp[sp][sn][iea[sn]],mtyp)
 					if modtyp[sp][sn][iea[sn]][0] == '': modtyp[sp][sn][iea[sn]] = np.delete(modtyp[sp][sn][iea[sn]], 0)
 				mid = np.where(mtyp==modtyp[sp][sn][iea[sn]])[0][0]
-				slf._funcinst[mtyp]._keywd = slf._modpass['mkey'][i]
-				params, nbn = slf._funccall[mtyp].set_vars(slf._funcinst[mtyp], parin, slf._levadd[i], slf._modpass, i, wvrng=wvrng, spid=slf._specid[sp], levid=slf._levadd, nexbin=[slf._datopt['bintype'][sp][sn],slf._datopt['nsubpix'][sp][sn]])
+				slf._funcarray[2][mtyp]._keywd = slf._modpass['mkey'][i]
+				params, nbn = slf._funcarray[1][mtyp].set_vars(slf._funcarray[2][mtyp], parin, slf._levadd[i], slf._modpass, i, wvrng=wvrng, spid=slf._specid[sp], levid=slf._levadd, nexbin=[slf._datopt['bintype'][sp][sn],slf._datopt['nsubpix'][sp][sn]])
 				if len(params) == 0: continue
 				if nbn > nexbins[sp][sn]:
 					if nbn > slf._argflag['run']['nsubmax']:
@@ -1331,7 +1429,7 @@ def load_subpixels(slf, parin):
 	for sp in range(len(slf._posnfull)):
 		for sn in range(len(slf._posnfull[sp])-1):
 			mtyp = slf._modpass['mtyp'][cvind]
-			params, nbn = slf._funccall[mtyp].set_vars(slf._funcinst[mtyp], parin, slf._levadd[cvind], slf._modpass, cvind, nexbin=[slf._datopt['bintype'][sp][sn],slf._datopt['nsubpix'][sp][sn]])
+			params, nbn = slf._funcarray[1][mtyp].set_vars(slf._funcarray[2][mtyp], parin, slf._levadd[cvind], slf._modpass, cvind, nexbin=[slf._datopt['bintype'][sp][sn],slf._datopt['nsubpix'][sp][sn]])
 			if nbn > nexbins[sp][sn]:
 				if nbn > slf._argflag['run']['nsubmax']:
 					nexbins[sp][sn] = slf._argflag['run']['nsubmax']
@@ -1394,9 +1492,9 @@ def load_par_influence(slf, parin):
 			ll = slf._posnfull[sp][sn]
 			lu = slf._posnfull[sp][sn+1]
 			shmtyp = slf._modpass['mtyp'][shind]
-			slf._funcinst[shmtyp]._keywd = slf._modpass['mkey'][shind]
-			shparams = slf._funccall[shmtyp].set_vars(slf._funcinst[shmtyp], parin, slf._levadd[shind], slf._modpass, shind)
-			wvrngt = slf._funccall[shmtyp].call_CPU(slf._funcinst[shmtyp], slf._wavefull[sp][ll:lu], shparams)
+			slf._funcarray[2][shmtyp]._keywd = slf._modpass['mkey'][shind]
+			shparams = slf._funcarray[1][shmtyp].set_vars(slf._funcarray[2][shmtyp], parin, slf._levadd[shind], slf._modpass, shind)
+			wvrngt = slf._funcarray[1][shmtyp].call_CPU(slf._funcarray[2][shmtyp], slf._wavefull[sp][ll:lu], shparams)
 			shind += 1
 			wvrng = [wvrngt.min(),wvrngt.max()]
 #			wvrng = [slf._wavefull[sp][ll:lu].min(),slf._wavefull[sp][ll:lu].max()]
@@ -1416,8 +1514,8 @@ def load_par_influence(slf, parin):
 					modtyp[sp][sn][iea[sn]] = np.append(modtyp[sp][sn][iea[sn]],mtyp)
 					if modtyp[sp][sn][iea[sn]][0] == '': modtyp[sp][sn][iea[sn]] = np.delete(modtyp[sp][sn][iea[sn]], 0)
 				mid = np.where(mtyp==modtyp[sp][sn][iea[sn]])[0][0]
-				slf._funcinst[mtyp]._keywd = slf._modpass['mkey'][i]
-				params, infv = slf._funccall[mtyp].set_vars(slf._funcinst[mtyp], parin, slf._levadd[i], slf._modpass, i, wvrng=wvrng, spid=slf._specid[sp], levid=slf._levadd, getinfl=True)
+				slf._funcarray[2][mtyp]._keywd = slf._modpass['mkey'][i]
+				params, infv = slf._funcarray[1][mtyp].set_vars(slf._funcarray[2][mtyp], parin, slf._levadd[i], slf._modpass, i, wvrng=wvrng, spid=slf._specid[sp], levid=slf._levadd, getinfl=True)
 				for j in infv:
 					if not inlinks(j): pinfl[sp][sn] = np.append(pinfl[sp][sn],j)
 					if j not in uinfl and not inlinks(j): uinfl = np.append(uinfl,j)
@@ -1427,7 +1525,7 @@ def load_par_influence(slf, parin):
 	for sp in range(len(slf._posnfull)):
 		for sn in range(len(slf._posnfull[sp])-1):
 			mtyp = slf._modpass['mtyp'][cvind]
-			params, infv = slf._funccall[mtyp].set_vars(slf._funcinst[mtyp], parin, slf._levadd[cvind], slf._modpass, cvind, getinfl=True)
+			params, infv = slf._funcarray[1][mtyp].set_vars(slf._funcarray[2][mtyp], parin, slf._levadd[cvind], slf._modpass, cvind, getinfl=True)
 			cvind += 1
 			for j in infv:
 				if j not in pinfl[sp][sn] and not inlinks(j): pinfl[sp][sn] = np.append(pinfl[sp][sn],j)
@@ -1437,7 +1535,7 @@ def load_par_influence(slf, parin):
 	for sp in range(len(slf._posnfull)):
 		for sn in range(len(slf._posnfull[sp])-1):
 			mtyp = slf._modpass['mtyp'][shind]
-			params, infv = slf._funccall[mtyp].set_vars(slf._funcinst[mtyp], parin, slf._levadd[shind], slf._modpass, shind, getinfl=True)
+			params, infv = slf._funcarray[1][mtyp].set_vars(slf._funcarray[2][mtyp], parin, slf._levadd[shind], slf._modpass, shind, getinfl=True)
 			shind += 1
 			for j in infv:
 				if j not in pinfl[sp][sn] and not inlinks(j): pinfl[sp][sn] = np.append(pinfl[sp][sn],j)
@@ -1491,7 +1589,7 @@ def load_parinfo(slf):
 	for i in range(len(slf._modpass['mtyp'])):
 		levadd.append(level)
 		mtyp = slf._modpass['mtyp'][i]
-		parinfo, add = slf._funccall[mtyp].set_pinfo(slf._funcinst[mtyp], parinfo, level, slf._modpass, slf._links, i)
+		parinfo, add = slf._funcarray[1][mtyp].set_pinfo(slf._funcarray[2][mtyp], parinfo, level, slf._modpass, slf._links, i)
 		level += add
 	# Test if some parameters are outside the limits
 	if slf._argflag['run']['limpar']:
