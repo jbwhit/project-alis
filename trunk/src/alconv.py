@@ -7,10 +7,10 @@ import alfunc_base
 from alutils import getreason
 msgs=almsgs.msgs()
 
-def print_model(diff, mp, thresh, verbose=2):
-	function=alfunc_base.call(getfuncs=True, verbose=verbose)
-	funcinst=alfunc_base.call(getinst=True, verbose=verbose)
-	funccall=alfunc_base.call(verbose=verbose)
+def print_model(diff, mp, thresh, verbose=2, funcarray=[None, None, None]):
+	function=funcarray[0]
+	funccall=funcarray[1]
+	funcinst=funcarray[2]
 	level=0
 	convstring = ""
 	donecv, donesh, donezl = [], [], []
@@ -72,7 +72,7 @@ def save_convtest(slf,diff,thresh,info,printout=True,extratxt=["",""]):
 			modcomlin.append(slf._modlines[i].rstrip('\n'))
 			modcomind.append(i)
 		inputmodl += "#   "+slf._modlines[i]
-	convstring = print_model(diff,slf._modpass,thresh,verbose=slf._argflag['out']['verbose'])
+	convstring = print_model(diff,slf._modpass,thresh,verbose=slf._argflag['out']['verbose'],funcarray=slf._funcarray)
 #	if printout and slf._argflag['out']['verbose'] != -1:
 #		print "\n####################################################"
 #		print convstring

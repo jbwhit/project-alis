@@ -156,8 +156,8 @@ def sim_random(slf, covar, bparams, parinfo):
 			lu = slf._posnfull[sp][sn+1]
 			getstdd=[slf._argflag['sim']['edgecut'],slf._wavefull[sp][ll],slf._wavefull[sp][lu-1]]
 			mtyp = slf._modpass['mtyp'][cvind[iind]]
-			slf._funcinst[mtyp]._keywd = slf._modpass['mkey'][cvind[iind]]
-			wvl, wvu = slf._funccall[mtyp].set_vars(slf._funcinst[mtyp], bparams, slf._levadd[cvind[iind]], slf._modpass, cvind[iind], getstdd=getstdd)
+			slf._funcarray[2][mtyp]._keywd = slf._modpass['mkey'][cvind[iind]]
+			wvl, wvu = slf._funcarray[1][mtyp].set_vars(slf._funcarray[2][mtyp], bparams, slf._levadd[cvind[iind]], slf._modpass, cvind[iind], getstdd=getstdd)
 			if wvl > slf._posnfit[sp][2*sn+0] or wvu < slf._posnfit[sp][2*sn+1]:
 				msgs.warn("The random simulations cannot be trusted. The fitted is"+msgs.newline()+
 						"affected by edge effects from convolution. It is recommended"+msgs.newline()+

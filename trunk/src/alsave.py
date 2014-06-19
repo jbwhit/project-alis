@@ -315,10 +315,10 @@ def save_modelfits(slf):
 	else:
 		return fnames
 
-def print_model(params, mp, errs=None, reletter=False, blind=False, getlines=False, verbose=2):
-	function=alfunc_base.call(getfuncs=True, verbose=verbose)
-	funcinst=alfunc_base.call(getinst=True, verbose=verbose)
-	funccall=alfunc_base.call(verbose=verbose)
+def print_model(params, mp, errs=None, reletter=False, blind=False, getlines=False, verbose=2, funcarray=[None,None,None]):
+	function=funcarray[0]
+	funccall=funcarray[1]
+	funcinst=funcarray[2]
 	level=0
 	outstring = ""
 	errstring = "#\n# Errors:\n#\n"
@@ -357,7 +357,7 @@ def print_model(params, mp, errs=None, reletter=False, blind=False, getlines=Fal
 				cvastring += outstr
 			elif mp['emab'][i] == "sh":
 				shastring += outstr
-			if outstr in donecv or outstr in donezl: continue
+			if outstr in donecv or outstr in donesh or outstr in donezl: continue
 			if mp['emab'][i] == "cv": donecv.append(outstr) # Make sure we don't print convolution parameters more than once.
 			elif mp['emab'][i] == "sh": donesh.append(outstr) # Make sure we don't print shift parameters more than once.
 			elif mp['emab'][i] == "zl": donezl.append(outstr) # Make sure we don't print zerolevel more than once.
@@ -442,7 +442,7 @@ def save_model(slf,params,errors,info,printout=True,extratxt=["",""],filename=No
 			modcomlin.append(slf._modlines[i].rstrip('\n'))
 			modcomind.append(i)
 		inputmodl += "#   "+slf._modlines[i]
-	outstring, errstring, arrstring = print_model(params,slf._modpass,errs=errors,verbose=slf._argflag['out']['verbose'])
+	outstring, errstring, arrstring = print_model(params,slf._modpass,errs=errors,verbose=slf._argflag['out']['verbose'],funcarray=slf._funcarray)
 	cvstring, cvestring, cvastring = arrstring[0], arrstring[1], arrstring[2]
 	shstring, shestring, shastring = arrstring[3], arrstring[4], arrstring[5]
 	if printout and slf._argflag['out']['verbose'] != -1:
@@ -616,8 +616,8 @@ def modlines(slf, params, mp, reletter=False, blind=False, verbose=2):
 			if aetag != "convolution": linesarr += [aetag]
 			lastemab = mp['emab'][i]
 		mtyp = mp['mtyp'][i]
-		slf._funcinst[mtyp]._keywd = mp['mkey'][i]
-		outstr, level = slf._funccall[mtyp].parout(slf._funcinst[mtyp], params, mp, i, level)
+		slf._funcarray[2][mtyp]._keywd = mp['mkey'][i]
+		outstr, level = slf._funcarray[1][mtyp].parout(slf._funcarray[2][mtyp], params, mp, i, level)
 		if mp['emab'][i] == "zl": donezl.append(outstr) # Make sure we don't print zerolevel more than once.
 		if aetag != 'convolution' and outstr not in donezl: linesarr += [outstr]
 	return linesarr
