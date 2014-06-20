@@ -1173,7 +1173,6 @@ def load_model(slf, modlines, updateself=True):
 					mlev += 1
 				elif modpass['mtie'][m][j] == -1:
 					mlev += 1
-	print modpass
 	msgs.info("Model loaded successfully",verbose=slf._argflag['out']['verbose'])
 	if updateself:
 		slf._emab = emab

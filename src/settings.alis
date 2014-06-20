@@ -24,7 +24,7 @@ chisq  fstep        20.0		# Factor above machine-precision to use for step size.
 chisq  miniter      0			# Minimum number of iterations before checking convergence criteria
 chisq  maxiter      2000        # Maximum number of iterations before giving up
 # PLOTTING
-#plot  labels       False        # Label the lines when plotting?
+plot  labels       False        # Label the lines when plotting?
 plot  fits         True         # Plot the best-fitting model with the data
 plot  pages        all          # Which pages to plot
 plot  dims         3x3          # Plotting dimensions (ROWSxCOLUMNS)
