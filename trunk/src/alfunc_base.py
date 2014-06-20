@@ -605,6 +605,14 @@ class Base :
 		"""
 		return fmt.replace("g}","f}")+"    " if np.abs(np.log10(np.abs(num))) < 3. or num==0.0 else fmt.replace("g","E")
 
+	def tick_info(self, p, level, mp, ival, wvrng=[0.0,0.0], spid='None', levid=None):
+		"""
+		For a given model, determine the wavelengths that
+		tick marks should be plotted, and the label that
+		should be associated with this tick mark.
+		By default, return no tick marks and no labels.
+		"""
+		return [], []
 #######################################################################################
 #######################################################################################
 #######################################################################################
