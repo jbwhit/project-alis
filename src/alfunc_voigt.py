@@ -408,8 +408,7 @@ class Voigt(alfunc_base.Base) :
 
 	def set_vars(self, p, level, mp, ival, wvrng=[0.0,0.0], spid='None', levid=None, nexbin=None, ddpid=None, getinfl=False):
 		"""
-		Return the parameters for a Gaussian function to be used by 'call'
-		The only thing that should be changed here is the parb values
+		Return the parameters for a Voigt function to be used by 'call'
 		"""
 		parinf=[]
 		# Determine if this is a column density ratio:
@@ -748,4 +747,128 @@ class Voigt(alfunc_base.Base) :
 			pinfo[level]['limited'] = [1,1]
 			pinfo[level]['limits']  = [-14.0,14.0]
 		return pinfo, add
+
+
+	def tick_info(self, p, level, mp, ival, wvrng=[0.0,0.0], spid='None', levid=None):
+		# Removed: nexbin=None, ddpid=None, getinfl=False
+		"""
+		For a given model, determine the wavelengths that
+		tick marks should be plotted, and the label that
+		should be associated with this tick mark.
+		"""
+		wavelns=[]
+		labllns=[]
+		parinf=[]
+		# Determine if this is a column density ratio:
+		if '/' in self._keywd['ion']:
+			cdratio = True
+			numrat, denrat = self._keywd['ion'].split('/')
+			m = np.where(self._atomic['Element'] == numrat.split('_')[0])
+			if np.size(m) != 1: msgs.error("Numerator element "+numrat+" not found for -"+msgs.newline()+self._keywd['ion'])
+			elmass = self._atomic['AtomicMass'][m][0]
+		else: cdratio = False
+		if not cdratio: # THE COLUMN DENSITY FOR A SINGLE ION HAS BEEN SPECIFIED
+			pt=np.zeros(self._pnumr)
+			levadd=0
+			m = np.where(self._atomic['Element'] == self._keywd['ion'].split('_')[0])
+			if np.size(m) != 1: msgs.error("Element {0:s} not found in atomic data file".format(self._keywd['ion'].split('_')[0]))
+			for i in range(self._pnumr):
+				lnkprm = None
+				parb = dict({'ap_1a':[None], 'ap_2a':pt[2], 'ap_2b':self._atomic['AtomicMass'][m][0]})
+				if mp['mtie'][ival][i] >= 0:
+					getid = mp['tpar'][mp['mtie'][ival][i]][1]
+				elif mp['mtie'][ival][i] <= -2:
+					if len(mp['mlnk']) == 0:
+						lnkprm = mp['mpar'][ival][i]
+					else:
+						for j in range(len(mp['mlnk'])):
+							if mp['mlnk'][j][0] == mp['mtie'][ival][i]:
+								cmd = 'lnkprm = ' + mp['mlnk'][j][1]
+								exec(cmd)
+					levadd += 1
+				else:
+					getid = level+levadd
+					levadd+=1
+				if lnkprm is None:
+					pt[i] = self.parin(i, p[getid], parb)
+					if mp['mfix'][ival][i] == 0: parinf.append(getid)
+				else:
+					pt[i] = lnkprm
+			nv = np.where(self._atomic['Ion'] == self._keywd['ion'])[0]
+			nw = np.where( (self._atomic['Wavelength'][nv]*(1.0+pt[1]) >= wvrng[0]) & (self._atomic['Wavelength'][nv]*(1.0+pt[1]) <= wvrng[1]) )
+			if self._atomic['Wavelength'][nv][nw].size == 0:
+				return [], []
+			for ln in range(0,self._atomic['Wavelength'][nv][nw].size):
+				wavelns.append((1.0+pt[1])*self._atomic['Wavelength'][nv][nw][ln])
+				labllns.append("{0:s} {1:.1f}".format(self._atomic['Ion'][nv][nw][ln].replace("_"," "),self._atomic['Wavelength'][nv][nw][ln]))
+		else: # THE RATIO OF TWO COLUMN DENSITIES HAS BEEN SPECIFIED
+			# Find all denrat in mp with matching specid's.
+			pt=[]
+			tsize = 0
+			for i in range(len(mp['mkey'])):
+				lnkprm = None
+				if mp['mtyp'][i] != self._idstr: continue   # Not a Voigt profile
+				if mp['mkey'][i]['ion'] != denrat: continue # Not denrat
+				if spid not in mp['mkey'][i]['specid']: continue # Not a common specid
+				# Determine if the column density ratio is N or logN.
+				nln = mp['mkey'][ival]['logN']
+				dln = mp['mkey'][i]['logN']
+				# Get the value of the column density ratio
+				pt.append(np.zeros(self._pnumr))
+				if mp['mtie'][ival][0] >= 0:
+					getid = mp['tpar'][mp['mtie'][ival][0]][1]
+				elif mp['mtie'][ival][0] <= -2:
+					if len(mp['mlnk']) == 0:
+						lnkprm = mp['mpar'][ival][0]
+					else:
+						for j in range(len(mp['mlnk'])):
+							if mp['mlnk'][j][0] == mp['mtie'][ival][0]:
+								cmd = 'lnkprm = ' + mp['mlnk'][j][1]
+								exec(cmd)
+				else:
+					getid = level
+				if lnkprm is None:
+					pt[-1][0] = p[getid]
+					if mp['mfix'][ival][0] == 0: parinf.append(getid)
+				else:
+					pt[-1][0] = lnkprm
+				# Get the parameters from the matching denrat and combine these with the appropriate parameters for numrat
+				levadd=0
+				for j in range(self._pnumr):
+					lnkprm = None
+					parb = dict({'ap_1a':[pt[-1][0],nln,dln], 'ap_2a':pt[-1][2], 'ap_2b':elmass})
+					if mp['mtie'][i][j] >= 0:
+						getid = mp['tpar'][mp['mtie'][i][j]][1]
+						getpr = p[getid]
+					elif mp['mtie'][i][j] == -1 and mp['mfix'][i][j] == 1:
+						getid = None
+						getpr = mp['mpar'][i][j]
+						levadd+=1
+					elif mp['mtie'][i][j] <= -2:
+						if len(mp['mlnk']) == 0:
+							lnkprm = mp['mpar'][i][j]
+						else:
+							for k in range(len(mp['mlnk'])):
+								if mp['mlnk'][k][0] == mp['mtie'][i][j]:
+									cmd = 'lnkprm = ' + mp['mlnk'][k][1]
+									exec(cmd)
+						levadd += 1
+					else:
+						getid = levid[i]+levadd
+						getpr = p[getid]
+						levadd+=1
+					if lnkprm is None:
+						pt[-1][j] = self.parin(j, getpr, parb)
+						if mp['mfix'][i][j] == 0: parinf.append(getid)
+					else:
+						pt[-1][j] = lnkprm
+				nv = np.where(self._atomic['Ion'] == numrat)[0]
+				nw = np.where( (self._atomic['Wavelength'][nv]*(1.0+pt[-1][1]) >= wvrng[0]) & (self._atomic['Wavelength'][nv]*(1.0+pt[-1][1]) <= wvrng[1]) )
+				for ln in range(0,self._atomic['Wavelength'][nv][nw].size):
+					wavelns.append((1.0+pt[-1][1])*self._atomic['Wavelength'][nv][nw][ln])
+					labllns.append("{0:s} {1:.1f}".format(self._atomic['Ion'][nv][nw][ln].replace("_"," "),self._atomic['Wavelength'][nv][nw][ln]))
+				tsize += self._atomic['Wavelength'][nv][nw].size
+			if tsize == 0:
+				return [], []
+		return wavelns, labllns
 

@@ -41,8 +41,9 @@ def make_plots_all(slf, model=None):
 	snips_done=0
 	numone = 0
 	pgcnt_arr = []
-	ps_wvarr, ps_fxarr, ps_fearr, ps_mdarr, ps_ctarr, ps_zrarr, ps_disps = [], [], [], [], [], [], []
-	po_wvarr, po_fxarr, po_fearr, po_mdarr, po_ctarr, po_zrarr, po_disps = [], [], [], [], [], [], []
+	p = slf._fitparams
+	ps_wvarr, ps_fxarr, ps_fearr, ps_mdarr, ps_ctarr, ps_zrarr, ps_disps, ps_twarr, ps_tlarr = [], [], [], [], [], [], [], [], []
+	po_wvarr, po_fxarr, po_fearr, po_mdarr, po_ctarr, po_zrarr, po_disps, po_twarr, po_tlarr = [], [], [], [], [], [], [], [], []
 	ps_labels, po_labels = [], []
 	# Construct the arrays for the subplots
 	if pages == 0: # Only doing single plots
@@ -57,6 +58,8 @@ def make_plots_all(slf, model=None):
 			po_ctarr.append([])
 			po_zrarr.append([])
 			po_labels.append([])
+			po_twarr.append([])
+			po_tlarr.append([])
 			llo=posnarr[sp][sn]
 			luo=posnarr[sp][sn+1]
 			po_disps[numone].append(0.5*np.append( (wavearr[sp][llo+1]-wavearr[sp][llo]), (wavearr[sp][llo+1:luo]-wavearr[sp][llo:luo-1]) ))
@@ -67,6 +70,21 @@ def make_plots_all(slf, model=None):
 			po_ctarr[numone].append(contarr[sp][llo:luo])
 			po_zrarr[numone].append(zeroarr[sp][llo:luo])
 			po_labels[numone].append(slf._datopt['label'][sp][sn])
+			# Load the tick marks and labels
+			wvrng = [wavearr[sp][llo],wavearr[sp][luo-1]]
+			p = slf._fitparams
+			tickwave, ticklabl = [], []
+			for i in range(0,len(slf._modpass['mtyp'])):
+				if slf._modpass['emab'][i] in ['cv','sh']: continue # This is a convolution or a shift (not emission or absorption)
+				if slf._specid[sp] not in slf._modpass['mkey'][i]['specid']: continue # Don't plot ticks for this model on this snip
+				mtyp=slf._modpass['mtyp'][i]
+				slf._funcarray[2][mtyp]._keywd = slf._modpass['mkey'][i]
+				ttickwave, tticklabl = slf._funcarray[1][mtyp].tick_info(slf._funcarray[2][mtyp], p, slf._levadd[i], slf._modpass, i, wvrng=wvrng, spid=slf._specid[sp], levid=slf._levadd)
+				for j in range(len(ttickwave)):
+					tickwave.append(ttickwave[j])
+					ticklabl.append(tticklabl[j])
+			po_twarr[numone].append(tickwave)
+			po_tlarr[numone].append(ticklabl)
 			snips_done += 1
 			numone += 1
 			pltlst[sp] += 1
@@ -90,6 +108,8 @@ def make_plots_all(slf, model=None):
 			ps_ctarr.append([])
 			ps_zrarr.append([])
 			ps_labels.append([])
+			ps_twarr.append([])
+			ps_tlarr.append([])
 #			ps_cparr.append([])
 			# Determine the number of panels for this page
 			if panels_left <= panppg: pgcnt = numsub-subpnl_done
@@ -106,6 +126,8 @@ def make_plots_all(slf, model=None):
 					po_ctarr.append([])
 					po_zrarr.append([])
 					po_labels.append([])
+					po_twarr.append([])
+					po_tlarr.append([])
 					llo=posnarr[sp][sn]
 					luo=posnarr[sp][sn+1]
 					po_disps[numone].append(0.5*np.append( (wavearr[sp][llo+1]-wavearr[sp][llo]), (wavearr[sp][llo+1:luo]-wavearr[sp][llo:luo-1]) ))
@@ -116,6 +138,20 @@ def make_plots_all(slf, model=None):
 					po_ctarr[numone].append(contarr[sp][llo:luo])
 					po_zrarr[numone].append(zeroarr[sp][llo:luo])
 					po_labels[numone].append(slf._datopt['label'][sp][sn])
+					# Load the tick marks and labels
+					wvrng = [wavearr[sp][llo],wavearr[sp][luo-1]]
+					tickwave, ticklabl = [], []
+					for j in range(0,len(slf._modpass['mtyp'])):
+						if slf._modpass['emab'][j] in ['cv','sh']: continue # This is a convolution or a shift (not emission or absorption)
+						if slf._specid[sp] not in slf._modpass['mkey'][j]['specid']: continue # Don't plot ticks for this model on this snip
+						mtyp=slf._modpass['mtyp'][j]
+						slf._funcarray[2][mtyp]._keywd = slf._modpass['mkey'][j]
+						ttickwave, tticklabl = slf._funcarray[1][mtyp].tick_info(slf._funcarray[2][mtyp], p, slf._levadd[j], slf._modpass, j, wvrng=wvrng, spid=slf._specid[sp], levid=slf._levadd)
+						for k in range(len(ttickwave)):
+							tickwave.append(ttickwave[k])
+							ticklabl.append(tticklabl[k])
+					po_twarr[numone].append(tickwave)
+					po_tlarr[numone].append(ticklabl)
 					snips_done += 1
 					numone += 1
 					pltlst[sp] += 1
@@ -144,6 +180,20 @@ def make_plots_all(slf, model=None):
 				ps_ctarr[pg].append(contarr[sp][ll:lu])
 				ps_zrarr[pg].append(zeroarr[sp][ll:lu])
 				ps_labels[pg].append(slf._datopt['label'][sp][sn])
+				# Load the tick marks and labels
+				wvrng = [wavearr[sp][ll],wavearr[sp][lu-1]]
+				tickwave, ticklabl = [], []
+				for j in range(0,len(slf._modpass['mtyp'])):
+					if slf._modpass['emab'][j] in ['cv','sh']: continue # This is a convolution or a shift (not emission or absorption)
+					if slf._specid[sp] not in slf._modpass['mkey'][j]['specid']: continue # Don't plot ticks for this model on this snip
+					mtyp=slf._modpass['mtyp'][j]
+					slf._funcarray[2][mtyp]._keywd = slf._modpass['mkey'][j]
+					ttickwave, tticklabl = slf._funcarray[1][mtyp].tick_info(slf._funcarray[2][mtyp], p, slf._levadd[j], slf._modpass, j, wvrng=wvrng, spid=slf._specid[sp], levid=slf._levadd)
+					for k in range(len(ttickwave)):
+						tickwave.append(ttickwave[k])
+						ticklabl.append(tticklabl[k])
+				ps_twarr[pg].append(tickwave)
+				ps_tlarr[pg].append(ticklabl)
 				#				ps_cparr[pg].append(comparr[sp][panels_done+i])
 				pltlst[sp] += 1
 			snips_done += pgcnt
@@ -151,15 +201,16 @@ def make_plots_all(slf, model=None):
 			panels_left -= panppg
 			pgcnt_arr.append(pgcnt)
 #	ps_nw = [ps_names, ps_waves]
-	ps_wfemc = [ps_wvarr, ps_fxarr, ps_fearr, ps_mdarr, ps_ctarr, ps_zrarr]
-	po_wfemc = [po_wvarr, po_fxarr, po_fearr, po_mdarr, po_ctarr, po_zrarr]
+	ps_wfemc = [ps_wvarr, ps_fxarr, ps_fearr, ps_mdarr, ps_ctarr, ps_zrarr, ps_twarr, ps_tlarr]
+	po_wfemc = [po_wvarr, po_fxarr, po_fearr, po_mdarr, po_ctarr, po_zrarr, po_twarr, po_tlarr]
 	msgs.info("Prepared {0:d} panels in subplots".format(subpnl_done), verbose=slf._argflag['out']['verbose'])
 	msgs.info("Prepared {0:d} panels in single plots".format(numone), verbose=slf._argflag['out']['verbose'])
-	numpagesA = plot_drawplots(pages, ps_wfemc, pgcnt_arr, ps_disps, dspl, slf._argflag, labels=ps_labels, verbose=slf._argflag['out']['verbose'])
-	numpagesB = plot_drawplots(numone, po_wfemc, np.ones(numone).astype(np.int), po_disps, [1,1], slf._argflag, labels=po_labels, numpages=pages, verbose=slf._argflag['out']['verbose'])
+	pticks=[slf._argflag['plot']['ticks'],slf._argflag['plot']['ticklabels']]
+	numpagesA = plot_drawplots(pages, ps_wfemc, pgcnt_arr, ps_disps, dspl, slf._argflag, labels=ps_labels, verbose=slf._argflag['out']['verbose'],plotticks=pticks)
+	numpagesB = plot_drawplots(numone, po_wfemc, np.ones(numone).astype(np.int), po_disps, [1,1], slf._argflag, labels=po_labels, numpages=pages, verbose=slf._argflag['out']['verbose'],plotticks=pticks)
 	msgs.info("Plotted {0:d} pages".format(numpagesA+numpagesB), verbose=slf._argflag['out']['verbose'])
 
-def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, labels=None, numpages=0, verbose=2):
+def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, labels=None, numpages=0, verbose=2, plotticks=[True,False]):
 	"""
 	Plot the fitting results in mxn panels.
 	"""
@@ -190,6 +241,8 @@ def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, labels=None, num
 				flue_med = 3.0*np.median(wfemcarr[2][pg][i])
 				res_size = 0.05*(modl_max-modl_min)
 				shift = np.min([modl_min-2.0*res_size, np.min(wfemcarr[5][pg][i])-np.max(wfemcarr[2][pg][i][w])-2.0*res_size])
+			ymax = np.max([modl_max+flue_med, 1.2*np.max(wfemcarr[4][pg][i])])
+			ymin = shift - 2.0*res_size
 			ax = fig[pgnum].add_subplot(dims[0],dims[1],i+1)
 			# Plot the error spectrum
 			ax.fill_between(wfemcarr[0][pg][i],wfemcarr[5][pg][i]-wfemcarr[2][pg][i],wfemcarr[5][pg][i]+wfemcarr[2][pg][i],facecolor='0.7')
@@ -225,6 +278,18 @@ def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, labels=None, num
 				msgs.warn("No model to plot for page {0:d} panel {1:d}".format(pg+1+numpages,i+1)+msgs.newline()+"You might need to check the fitrange for this parameter?", verbose=verbose)
 				wmin=np.min(wfemcarr[0][pg][i])
 				wmax=np.max(wfemcarr[0][pg][i])
+			# Plot tick marks
+			if plotticks[0] == True:
+				for j in range(len(wfemcarr[6][pg][i])):
+					wtc = wfemcarr[6][pg][i][j]
+					wmt = np.argmin(np.abs(wfemcarr[0][pg][i][w]-wtc))
+					ytkmin = wfemcarr[4][pg][i][w][wmt] + 0.05*(ymax-ymin)
+					ytkmax = wfemcarr[4][pg][i][w][wmt] + 0.12*(ymax-ymin)
+					ax.plot([wtc,wtc],[ytkmin,ytkmax], 'r-')
+					if plotticks[1] == True: # Also plot the tick labels
+						ytkmax = wfemcarr[4][pg][i][w][wmt] + 0.15*(ymax-ymin)
+						ax.text(wtc,ytkmax,wfemcarr[7][pg][i][j],horizontalalignment='center',rotation='vertical',clip_on=True)
+
 #			for j in range(0,len(comparr[pg][i])/3):
 #				if comparr[pg][i][3*j] == '0': cstr = 'k-'
 #				else: cstr = 'r-'
@@ -244,8 +309,6 @@ def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, labels=None, num
 			ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%6.2f'))
 #			if argflag['plot']['labels']: ymax = np.max([1.0+2.0*flue_med, 2.0])
 #			else: ymax = np.max([1.0+2.0*flue_med, 1.2])
-			ymax = np.max([modl_max+flue_med, 1.2*np.max(wfemcarr[4][pg][i])])
-			ymin = shift - 2.0*res_size
 			ax.set_ylim(ymin,ymax)
 			#ax.set_yticks((0,0.5,1.0))
 			# Plot the label

@@ -648,6 +648,7 @@ class ClassMain:
 			msgs.info("Number of free parameters: {0:d}".format(numfreepars),verbose=self._argflag['out']['verbose'])
 		if self._argflag['plot']['only']:
 			# Go straight to plotting
+			self._fitparams = self._modpass['p0']
 			alplot.make_plots_all(self)
 			fileend=raw_input(msgs.input()+"Press enter to view the fits -")
 			alplot.plot_showall()
@@ -720,12 +721,14 @@ class ClassMain:
 					fa['fdict'] = self.__dict__
 					iternum += 1
 			self._fitresults = m
+			self._fitparams = m.params
 			self._tend=time.time()
 		elif self._argflag['generate']['data']:
 			# Save the generated data
 			#if self._argflag['out']['fits'] or self._argflag['out']['onefits']:
 			# Go to modelfits to generate the fake data. It won't be written out unless self._argflag['out']['fits'] is True
 			self, fnames = alsave.save_modelfits(self)
+			self._fitparams = self._modpass['p0']
 			# Plot the results
 			if self._argflag['plot']['fits']:
 				alplot.make_plots_all(self)
@@ -757,6 +760,7 @@ class ClassMain:
 			# If the user just wants to fit the data and return, do so.
 			if self._fitonly:
 				self._fitresults = m
+				self._fitparams = m.params
 				model = self.myfunct(m.params, output=1)
 				return self
 			# Otherwise, do everything else
@@ -849,6 +853,7 @@ class ClassMain:
 						alconv.save_convtest(self, diff, self._argflag['run']['convcriteria'],fit_info)
 			# Store the fitting results
 			self._fitresults = m
+			self._fitparams = m.params
 			# Write out the data and model fits
 			if self._argflag['out']['fits'] or self._argflag['out']['onefits']:
 				fnames = alsave.save_modelfits(self)
