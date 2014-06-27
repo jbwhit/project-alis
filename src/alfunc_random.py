@@ -3,19 +3,20 @@ import almsgs
 import alfunc_base
 msgs=almsgs.msgs()
 
-class Variable(alfunc_base.Base):
+class Random(alfunc_base.Base):
 	"""
 	Returns a single variable:
 	p[0] = value
-	This is useful when you want to calculate the value
-	and error on a combination of other model parameters.
+	This is useful when you want the starting parameter value
+	of some variable to be random every time you run the model
+	with ALIS. This function should be used with links.
 	"""
 	def __init__(self, prgname="", getinst=False, atomic=None, verbose=2):
-		self._idstr   = 'variable'								# ID string for this class
+		self._idstr   = 'random'								# ID string for this class
 		self._pnumr   = 1										# Total number of parameters fed in
-		self._keywd   = dict({'specid':[], 'blind':False})		# Additional arguments to describe the model --- 'input' cannot be used as a keyword
-		self._keych   = dict({'specid':0,  'blind':0})			# Require keywd to be changed (1 for yes, 0 for no)
-		self._keyfm   = dict({'specid':"", 'blind':""})			# Format for the keyword. "" is the Default setting
+		self._keywd   = dict({'specid':[], 'blind':False, 'command':"random()", 'start':True})		# Additional arguments to describe the model --- 'input' cannot be used as a keyword
+		self._keych   = dict({'specid':0,  'blind':0, 'command':1, 'start':0})		# Require keywd to be changed (1 for yes, 0 for no)
+		self._keyfm   = dict({'specid':"", 'blind':"", 'command':"", 'start':""})	# Format for the keyword. "" is the Default setting
 		self._parid   = ['value']								# Name of each parameter
 		self._defpar  = [ 0.0 ]									# Default values for parameters that are not provided
 		self._fixpar  = [ None ]								# By default, should these parameters be fixed?
@@ -43,7 +44,7 @@ class Variable(alfunc_base.Base):
 		return
 
 
-	def parin(self, i, par, parb):
+	def parin(self, i, par, parb, start=False):
 		"""
 		This routine converts a parameter in the input model file
 		to the parameter used in 'call'
@@ -53,29 +54,38 @@ class Variable(alfunc_base.Base):
 		in the function specified by 'call'
 		--------------------------------------------------------
 		"""
-		if   i == 0: pin = par
+		if self._keywd['start']:
+			if i == 0: exec("pin = np.random."+parb["cmd"])
+			self._keywd['start'] = False
+		else:
+			if i == 0: pin = par
 		return pin
 
 
-	def set_vars(self, p, level, mp, ival, wvrng=[0.0,0.0], spid='None', levid=None, nexbin=None, ddpid=None, getinfl=False):
+	def set_vars(self, p, level, mp, ival, wvrng=[0.0,0.0], spid='None', levid=None, nexbin=None, ddpid=None, getinfl=False, start=False):
 		levadd=0
 		params=np.zeros(self._pnumr)
 		parinf=[]
 		for i in range(self._pnumr):
-			parb = None
+			parb = dict({'cmd':self._keywd['command']})
 			if mp['mtie'][ival][i] >= 0:
 				getid = mp['tpar'][mp['mtie'][ival][i]][1]
 			elif mp['mtie'][ival][i] <= -2:
-				msgs.error("You are not allowed to link to the function 'variable'")
+				msgs.error("You are not allowed to link to the function 'random'")
 			else:
 				getid = level+levadd
 				levadd+=1
-			params[i] = self.parin(i, p[getid], parb)
+			if self._keywd['start']:
+				params[i] = self.parin(i, p[getid], parb)
+				mp['mpar'][ival][i] = params[i]
+				mp['p0'][level] = params[i]
+			else:
+				params[i] = self.parin(i, p[getid], parb)
 			if mp['mfix'][ival][i] == 0: parinf.append(getid)
 		if ddpid is not None:
 			if ddpid not in parinf: return []
 		if nexbin is not None:
-			if params[2] == 0.0: msgs.error("Cannot calculate "+self._idstr+" subpixellation -- width = 0.0")
+			if params[0] == 0.0: msgs.error("Cannot calculate "+self._idstr+" subpixellation -- width = 0.0")
 			if nexbin[0] == "km/s": return params, 1
 			elif nexbin[0] == "A" : return params, 1
 			else: msgs.bug("bintype "+nexbin[0]+" should not have been specified in model function: "+self._idstr, verbose=self._verbose)

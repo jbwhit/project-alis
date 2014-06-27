@@ -979,7 +979,7 @@ def load_model(slf, modlines, updateself=True):
 		else:
 			msgs.error("Keyword '"+mdlspl[0]+"' is not a recognised model")
 		# Append whether this is emission or absorption and add one to the counter.
-		if mdlspl[0].strip() == 'variable':
+		if mdlspl[0].strip() in ['variable','random']:
 			modpass['emab'].append('va')
 		else:
 			modpass['emab'].append(emabtag)
@@ -1209,9 +1209,9 @@ def load_links(slf, lnklines):
 			for j in range(len(varB)): varB[j] = varB[j].strip()
 			varB = sorted(varB,key=len)[::-1]
 			if "numpy" in varB:
-				msgs.error("variable 'numpy' cannot be used in links - this string is reserved")
+				msgs.warn("variable 'numpy' cannot be used in links - this string is reserved for numpy functions")
 			elif "np" in varB:
-				msgs.error("variable 'np' cannot be used in links - this string is reserved")
+				msgs.warn("variable 'np' cannot be used in links - this string is reserved for numpy functions")
 		except:
 			msgs.error("You must specify links, with spaces, in the following example form -"+msgs.newline()+"va(vb) = 2.4 + vb")
 		if varA in linka:

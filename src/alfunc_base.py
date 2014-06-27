@@ -627,6 +627,7 @@ import alfunc_linear
 import alfunc_lineemission
 import alfunc_polynomial
 import alfunc_powerlaw
+import alfunc_random
 import alfunc_thar
 import alfunc_tophat
 import alfunc_variable
@@ -658,6 +659,7 @@ def call(prgname="",getfuncs=False,getinst=False,atomic=None,verbose=2):
 				'lineemission'   : alfunc_lineemission.LineEmission,
 				'polynomial'     : alfunc_polynomial.Polynomial,
 				'powerlaw'       : alfunc_powerlaw.PowerLaw,
+				'random'         : alfunc_random.Random,
 				'thar'           : alfunc_thar.ThAr,
 				'tophat'         : alfunc_tophat.TopHat,
 				'variable'       : alfunc_variable.Variable,
