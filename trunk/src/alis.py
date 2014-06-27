@@ -287,7 +287,7 @@ class ClassMain:
 					else: aetag = 'ab'
 					for md in range(0,len(pararr[sp][sn][ea])):
 						mtyp = modtyp[sp][sn][ea][md]
-						if mtyp == "variable": continue
+						if mtyp in ["variable","random"]: continue
 						if len(pararr[sp][sn][ea][md]) == 0: continue # OR PARAMETER NOT BEING VARIED!!!
 						# Multiprocess here and send to either the CPU or GPU
 #						if self._argflag['run']['ngpus'] != 0:
@@ -504,7 +504,7 @@ class ClassMain:
 					else: aetag = 'ab'
 					for md in range(0,len(opararr[sp][sn][ea])):
 						mtyp = modtyp[sp][sn][ea][md]
-						if mtyp == "variable": continue
+						if mtyp in ["variable","random"]: continue
 						if len(opararr[sp][sn][ea][md]) == 0: continue # OR PARAMETER NOT BEING VARIED!!!
 						# Calculate both the old and new model
 						if ea%2 == 0: # emission

@@ -346,6 +346,8 @@ def print_model(params, mp, errs=None, reletter=False, blind=False, getlines=Fal
 			elif mp['emab'][i] == "sh":
 				shstring  += " "+aetag+"\n"
 				shestring += "#"+aetag+"\n"
+			elif mp['emab'][i] == "va":
+				pass
 			else:
 				outstring += " "+aetag+"\n"
 				errstring += "#"+aetag+"\n"
