@@ -85,7 +85,7 @@ class Random(alfunc_base.Base):
 		if ddpid is not None:
 			if ddpid not in parinf: return []
 		if nexbin is not None:
-			if params[0] == 0.0: msgs.error("Cannot calculate "+self._idstr+" subpixellation -- width = 0.0")
+			if params[1] == 0.0: msgs.error("Cannot calculate "+self._idstr+" subpixellation -- width = 0.0")
 			if nexbin[0] == "km/s": return params, 1
 			elif nexbin[0] == "A" : return params, 1
 			else: msgs.bug("bintype "+nexbin[0]+" should not have been specified in model function: "+self._idstr, verbose=self._verbose)
