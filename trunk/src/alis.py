@@ -867,7 +867,7 @@ class ClassMain:
 				if self._argflag['run']['convergence']:
 					if mc.status != -20 and mpars.status != -20:
 						msgs.info("Printing out the parameter errors:",verbose=self._argflag['out']['verbose'])
-						print alsave.print_model(m.perror, self._modpass, blind=True, verbose=self._argflag['out']['verbose'],funcarray=slf._funcarray)
+						print alsave.print_model(m.perror, self._modpass, blind=True, verbose=self._argflag['out']['verbose'],funcarray=self._funcarray)
 				else:
 					msgs.info("Printing out the parameter errors:",verbose=self._argflag['out']['verbose'])
 					print alsave.print_model(m.perror, self._modpass, blind=True, verbose=self._argflag['out']['verbose'],funcarray=slf._funcarray)
