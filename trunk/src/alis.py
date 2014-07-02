@@ -941,7 +941,7 @@ def initialise(alispath, verbose=-1):
 	return slf
 
 if __name__ == "__main__":
-	debug = True # There are two instances of this (one is in alis just above)
+	debug = False # There are two instances of this (one is in alis just above)
 	if debug:
 		msgs.bug("Read in resolution from column of data")
 		msgs.bug("With voigt function, if the user says to put an O I profile in specid A, make sure there is actually an O I line in specid A.")
