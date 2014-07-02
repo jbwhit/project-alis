@@ -750,6 +750,8 @@ class ClassMain:
 				elif m.status == -21: # Parameters are not within the specified limits
 					if type(self._modpass['line'][m.errmsg[0][0]]) is int: msgs.error("A parameter that = {0:s} is not within the specified limits on line -".format(m.errmsg[1])+msgs.newline()+self._modlines[self._modpass['line'][m.errmsg[0][0]]])
 					else: msgs.error("A parameter that = {0:s} is not within specified limits on line -".format(m.errmsg[1])+msgs.newline()+self._modpass['line'][m.errmsg[0][0]])
+				elif m.status == -16:
+					msgs.error("There was an error in the chi-squared minimization - "+msgs.newline()+"A parameter or function value has become infinite or an undefined"+msgs.newline()+"number. This is usually a consequence of numerical overflow in the"+msgs.newline()+"user's model function, which must be avoided.")
 				else:
 					if m.errmsg == "": msgs.error("There was an error in the chi-squared minimization - "+msgs.newline()+"please contact the author")
 					msgs.error(m.errmsg)
@@ -870,7 +872,7 @@ class ClassMain:
 						print alsave.print_model(m.perror, self._modpass, blind=True, verbose=self._argflag['out']['verbose'],funcarray=self._funcarray)
 				else:
 					msgs.info("Printing out the parameter errors:",verbose=self._argflag['out']['verbose'])
-					print alsave.print_model(m.perror, self._modpass, blind=True, verbose=self._argflag['out']['verbose'],funcarray=slf._funcarray)
+					print alsave.print_model(m.perror, self._modpass, blind=True, verbose=self._argflag['out']['verbose'],funcarray=self._funcarray)
 			if self._argflag['out']['model']:
 				fit_info=[(self._tend - self._tstart)/3600.0, m.fnorm, m.dof, m.niter, m.status]
 				alsave.save_model(self, m.params, m.perror, fit_info)
@@ -939,7 +941,7 @@ def initialise(alispath, verbose=-1):
 	return slf
 
 if __name__ == "__main__":
-	debug = False # There are two instances of this (one is in alis just above)
+	debug = True # There are two instances of this (one is in alis just above)
 	if debug:
 		msgs.bug("Read in resolution from column of data")
 		msgs.bug("With voigt function, if the user says to put an O I profile in specid A, make sure there is actually an O I line in specid A.")

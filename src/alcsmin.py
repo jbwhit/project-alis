@@ -241,7 +241,7 @@ class alfit(object):
 		-15 to -1
 		   These are error codes that either MYFUNCT or iterfunct may return to
 		   terminate the fitting process.  Values from -15 to -1 are reserved
-		   for the user functions and will not clash with ALFIT.
+		   for the user functions and will not clash with ALIS.
 
 		0  Improper input parameters.
 
