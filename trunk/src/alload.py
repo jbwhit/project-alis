@@ -413,8 +413,8 @@ def load_data(slf, datlines, data=None):
 	# Now begin
 	specid=np.array([])
 	slf._snipid=[]
-	datopt = dict({'specid':[],'fitrange':[],'plotone':[],'nsubpix':[],'bintype':[],'columns':[],'systematics':[],'systmodule':[],'label':[]})
-	keywords = ['specid','fitrange','systematics','systmodule','resolution','shift','columns','plotone','nsubpix','bintype','loadall','label']
+	datopt = dict({'specid':[],'fitrange':[],'plotone':[],'nsubpix':[],'bintype':[],'columns':[],'systematics':[],'systmodule':[],'label':[],'yrange':[]})
+	keywords = ['specid','fitrange','systematics','systmodule','resolution','shift','columns','plotone','nsubpix','bintype','loadall','label','yrange']
 	colallow = np.array(['wave','flux','error','continuum','zerolevel','fitrange','systematics','resolution'])
 	columns  = np.array(['wave','flux','error'])
 	systload = [None, 'continuumpoly']
@@ -510,6 +510,7 @@ def load_data(slf, datlines, data=None):
 		datopt['nsubpix'].append([])
 		datopt['bintype'].append([])
 		datopt['label'].append([])
+		datopt['yrange'].append([])
 		datopt['specid'].append([])
 		datopt['fitrange'].append([])
 		snipnames.append([])
@@ -547,6 +548,7 @@ def load_data(slf, datlines, data=None):
 		uselabel  = ''
 		specidtxt = ''
 		fitrtxt   = ''
+		yrngtxt   = ''
 		wavemin, wavemax = None, None
 		nspix = slf._argflag['run']['nsubpix']
 		bntyp = slf._argflag['run']['bintype']
@@ -604,6 +606,21 @@ def load_data(slf, datlines, data=None):
 					setplot = True # Force this plot to be shown by itself
 				elif kwdspl[0] == 'label':
 					uselabel = kwdspl[1]
+				elif kwdspl[0] == 'yrange':
+					yrngtxt = linspl[j]
+					yrngspl = kwdspl[1].strip('[]()').split(',')
+					if len(yrngspl) == 2:
+						if yrngspl[0].lower() == "none":
+							yrngmin = None
+						else:
+							yrngmin = np.float64(yrngspl[0])
+						if yrngspl[1].lower() == "none":
+							yrngmax = None
+						else:
+							yrngmax = np.float64(yrngspl[1])
+					elif yrngspl == ['all']:
+						yrngmin, yrngmax = None, None
+					else: msgs.bug("specified 'yrange' is not allowed on line -"+msgs.newline()+datlines[i],verbose=slf._argflag['out']['verbose'])
 				elif kwdspl[0] == 'loadall' and kwdspl[1] in ['True','true','TRUE']:
 					loadall = True # Force this plot to be shown by itself
 		if wavemin is None or wavemax is None:
@@ -661,6 +678,7 @@ def load_data(slf, datlines, data=None):
 		datopt['plotone'][sind].append(setplot)
 		datopt['label'][sind].append(uselabel)
 		datopt['fitrange'][sind].append(fitrtxt)
+		datopt['yrange'][sind].append(yrngtxt)
 		datopt['columns'][sind].append(wfe)
 		datopt['bintype'][sind].append(bntyp)
 		datopt['systematics'][sind].append(systfile)
