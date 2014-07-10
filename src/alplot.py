@@ -37,6 +37,7 @@ def make_plots_all(slf, model=None):
 			else:
 				numsub += 1
 				subids[i].append(1)
+	# For each spectrum that is read in, create an entry in snpid with the index for the sidlist
 	snpid=[]
 	for i in range(len(slf._snipid)): snpid.append(np.where(sidlst==slf._snipid[i])[0][0])
 	pages = numoplt + int(np.ceil(numsub/float(panppg)))
@@ -108,18 +109,19 @@ def make_plots_all(slf, model=None):
 		lesspg = 0
 		for pg in range(0,pages):
 			# Determine the number of panels for this page
+			if snips_done == len(snpid): break
 			sp = snpid[snips_done]
 			sn = tpltlst[sp]
 			if subids[sp][sn] == 0:
 				snips_done += 1
 				numone += 1
 				tpltlst[sp] += 1
-				sn = tpltlst[sp]
-				# If the snip number has gone beyond the array size, go to the next specid.
-				if sn == np.size(subids[sp]):
-					if snips_done == np.size(snpid): break
-					sp = snpid[snips_done]
-					sn = tpltlst[sp]
+#				sn = tpltlst[sp]
+#				# If the snip number has gone beyond the array size, go to the next specid.
+#				if sn == np.size(subids[sp]):
+#					if snips_done == np.size(snpid): break
+#					sp = snpid[snips_done]
+#					sn = tpltlst[sp]
 			else:
 				if panels_left <= panppg: pgcnt = numsub-subpnl_done
 				else: pgcnt = panppg
@@ -135,9 +137,12 @@ def make_plots_all(slf, model=None):
 						sn = tpltlst[sp]
 						# If the snip number has gone beyond the array size, go to the next specid.
 						if sn == np.size(subids[sp]):
-							if snips_done == np.size(snpid): break
-							sp = snpid[snips_done]
+							if snips_done+i == np.size(snpid): break
+							sp = snpid[snips_done+i]
 							sn = tpltlst[sp]
+#							print pg, sp, sn
+#							print tpltlst
+#							print pg, i, sp, sn, snips_done, len(subids), len(subids[sp])
 							# If the next snip for the next specid is a single plot, don't break.
 							if subids[sp][sn] != 0: break # Otherwise, break the while loop
 					tpltlst[sp] += 1
@@ -196,10 +201,10 @@ def make_plots_all(slf, model=None):
 				pltlst[sp] += 1
 				sn = pltlst[sp]
 				# If the snip number has gone beyond the array size, go to the next specid.
-				if sn == np.size(subids[sp]):
-					if snips_done == np.size(snpid): break
-					sp = snpid[snips_done]
-					sn = pltlst[sp]
+#				if sn == np.size(subids[sp]):
+#					if snips_done == np.size(snpid): break
+#					sp = snpid[snips_done]
+#					sn = pltlst[sp]
 			else:
 #				ps_names.append([])
 #				ps_waves.append([])
@@ -235,15 +240,15 @@ def make_plots_all(slf, model=None):
 						po_tlarr.append([])
 						llo=posnarr[sp][sn]
 						luo=posnarr[sp][sn+1]
-						po_disps[numone].append(0.5*np.append( (wavearr[sp][llo+1]-wavearr[sp][llo]), (wavearr[sp][llo+1:luo]-wavearr[sp][llo:luo-1]) ))
-						po_wvarr[numone].append(wavearr[sp][llo:luo])
-						po_fxarr[numone].append(fluxarr[sp][llo:luo])
-						po_fearr[numone].append(fluearr[sp][llo:luo])
-						po_mdarr[numone].append(modlarr[sp][llo:luo])
-						po_ctarr[numone].append(contarr[sp][llo:luo])
-						po_zrarr[numone].append(zeroarr[sp][llo:luo])
-						po_labels[numone].append(slf._datopt['label'][sp][sn])
-						po_yrange[numone].append(slf._datopt['yrange'][sp][sn])
+						po_disps[numone+tnumone].append(0.5*np.append( (wavearr[sp][llo+1]-wavearr[sp][llo]), (wavearr[sp][llo+1:luo]-wavearr[sp][llo:luo-1]) ))
+						po_wvarr[numone+tnumone].append(wavearr[sp][llo:luo])
+						po_fxarr[numone+tnumone].append(fluxarr[sp][llo:luo])
+						po_fearr[numone+tnumone].append(fluearr[sp][llo:luo])
+						po_mdarr[numone+tnumone].append(modlarr[sp][llo:luo])
+						po_ctarr[numone+tnumone].append(contarr[sp][llo:luo])
+						po_zrarr[numone+tnumone].append(zeroarr[sp][llo:luo])
+						po_labels[numone+tnumone].append(slf._datopt['label'][sp][sn])
+						po_yrange[numone+tnumone].append(slf._datopt['yrange'][sp][sn])
 						# Load the tick marks and labels
 						wvrng = [wavearr[sp][llo],wavearr[sp][luo-1]]
 						tickwave, ticklabl = [], []
@@ -256,16 +261,16 @@ def make_plots_all(slf, model=None):
 							for k in range(len(ttickwave)):
 								tickwave.append(ttickwave[k])
 								ticklabl.append(tticklabl[k])
-						po_twarr[numone].append(tickwave)
-						po_tlarr[numone].append(ticklabl)
+						po_twarr[numone+tnumone].append(tickwave)
+						po_tlarr[numone+tnumone].append(ticklabl)
 						snips_done += 1
 						tnumone += 1
 						pltlst[sp] += 1
 						sn = pltlst[sp]
 						# If the snip number has gone beyond the array size, go to the next specid.
 						if sn == np.size(subids[sp]):
-							if snips_done == np.size(snpid): break
-							sp = snpid[snips_done]
+							if snips_done+i == np.size(snpid): break
+							sp = snpid[snips_done+i]
 							sn = pltlst[sp]
 							# If the next snip for the next specid is a single plot, don't break.
 							if subids[sp][sn] != 0: break # Otherwise, break the while loop
@@ -317,7 +322,7 @@ def make_plots_all(slf, model=None):
 	msgs.info("Prepared {0:d} panels in single plots".format(numone), verbose=slf._argflag['out']['verbose'])
 	pticks=[slf._argflag['plot']['ticks'],slf._argflag['plot']['ticklabels']]
 	numpagesA = plot_drawplots(pages-numone, ps_wfemc, pgcnt_arr, ps_disps, dspl, slf._argflag, labels=ps_labels, verbose=slf._argflag['out']['verbose'],plotticks=pticks,yrange=ps_yrange)
-	numpagesB = plot_drawplots(numone, po_wfemc, np.ones(numone).astype(np.int), po_disps, [1,1], slf._argflag, labels=po_labels, numpages=pages, verbose=slf._argflag['out']['verbose'],plotticks=pticks,yrange=po_yrange)
+	numpagesB = plot_drawplots(numone, po_wfemc, np.ones(numone).astype(np.int), po_disps, [1,1], slf._argflag, labels=po_labels, numpages=pages-numone, verbose=slf._argflag['out']['verbose'],plotticks=pticks,yrange=po_yrange)
 	msgs.info("Plotted {0:d} pages".format(numpagesA+numpagesB), verbose=slf._argflag['out']['verbose'])
 
 def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, labels=None, numpages=0, verbose=2, plotticks=[True,False], yrange=None):
