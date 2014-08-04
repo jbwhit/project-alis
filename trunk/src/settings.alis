@@ -29,6 +29,7 @@ plot  fits         True         # Plot the best-fitting model with the data
 plot  pages        all          # Which pages to plot
 plot  ticks        True         # Plot tick marks for each model?
 plot  ticklabels   False        # Plot labels on the tick marks for each model?
+plot  fitregions   False        # Plot the regions that are being used to fit the data?
 plot  dims         3x3          # Plotting dimensions (ROWSxCOLUMNS)
 #plot  xaxis        observed     # what to plot: 'observed', 'rest', or 'velocity'
 # OUTPUT
