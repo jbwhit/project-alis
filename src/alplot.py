@@ -4,6 +4,66 @@ from matplotlib import ticker
 import almsgs
 msgs=almsgs.msgs()
 
+def get_fitregions(wave,cont,fitted,disp,size=None):
+	fsize = 40.0
+	xfr, yfr = [], []
+	nval = 0
+	for i in range(wave.size):
+		if fitted[i]:
+			if nval == 0:
+				xfr.append(wave[i]-disp[i])
+				xfr.append(wave[i]-disp[i])
+				if size is None:
+					yfr.append(cont[i]-cont[i]/fsize)
+					yfr.append(cont[i]+cont[i]/fsize)
+				else:
+					yfr.append(cont[i]-size/fsize)
+					yfr.append(cont[i]+size/fsize)
+				xfr.append(None)
+				yfr.append(None)
+				xfr.append(wave[i]-disp[i])
+				yfr.append(cont[i])
+				xfr.append(wave[i])
+				yfr.append(cont[i])
+				nval = 1
+			elif nval == 1:
+				xfr.append(wave[i])
+				yfr.append(cont[i])
+			flag = True
+		elif flag:
+			if nval == 1:
+				xfr.append(wave[i-1]+disp[i-1])
+				yfr.append(cont[i-1])
+				xfr.append(None)
+				yfr.append(None)
+				xfr.append(wave[i-1]+disp[i-1])
+				xfr.append(wave[i-1]+disp[i-1])
+				if size is None:
+					yfr.append(cont[i-1]-cont[i-1]/fsize)
+					yfr.append(cont[i-1]+cont[i-1]/fsize)
+				else:
+					yfr.append(cont[i-1]-size/fsize)
+					yfr.append(cont[i-1]+size/fsize)
+			xfr.append(None)
+			yfr.append(None)
+			nval = 0
+			flag = False
+	# Finally, include the end point
+	i = wave.size
+	xfr.append(wave[i-1]+disp[i-1])
+	yfr.append(cont[i-1])
+	xfr.append(None)
+	yfr.append(None)
+	xfr.append(wave[i-1]+disp[i-1])
+	xfr.append(wave[i-1]+disp[i-1])
+	if size is None:
+		yfr.append(cont[i-1]-cont[i-1]/fsize)
+		yfr.append(cont[i-1]+cont[i-1]/fsize)
+	else:
+		yfr.append(cont[i-1]-size/fsize)
+		yfr.append(cont[i-1]+size/fsize)
+	return xfr, yfr
+
 def make_plots_all(slf, model=None):
 	msgs.info("Preparing data to be plotted", verbose=slf._argflag['out']['verbose'])
 	wavearr, fluxarr, fluearr, modlarr, contarr, zeroarr = slf._wavefull, slf._fluxfull, slf._fluefull, slf._modfinal, slf._contfinal, slf._zerofinal
@@ -47,8 +107,8 @@ def make_plots_all(slf, model=None):
 	numone = 0
 	pgcnt_arr = []
 	p = slf._fitparams
-	ps_wvarr, ps_fxarr, ps_fearr, ps_mdarr, ps_ctarr, ps_zrarr, ps_disps, ps_twarr, ps_tlarr = [], [], [], [], [], [], [], [], []
-	po_wvarr, po_fxarr, po_fearr, po_mdarr, po_ctarr, po_zrarr, po_disps, po_twarr, po_tlarr = [], [], [], [], [], [], [], [], []
+	ps_wvarr, ps_fxarr, ps_fearr, ps_mdarr, ps_ctarr, ps_zrarr, ps_disps, ps_twarr, ps_tlarr, ps_ftarr = [], [], [], [], [], [], [], [], [], []
+	po_wvarr, po_fxarr, po_fearr, po_mdarr, po_ctarr, po_zrarr, po_disps, po_twarr, po_tlarr, po_ftarr = [], [], [], [], [], [], [], [], [], []
 	ps_labels, po_labels = [], []
 	ps_yrange, po_yrange = [], []
 	# Construct the arrays for the subplots
@@ -67,6 +127,7 @@ def make_plots_all(slf, model=None):
 			po_yrange.append([])
 			po_twarr.append([])
 			po_tlarr.append([])
+			po_ftarr.append([])
 			llo=posnarr[sp][sn]
 			luo=posnarr[sp][sn+1]
 			po_disps[numone].append(0.5*np.append( (wavearr[sp][llo+1]-wavearr[sp][llo]), (wavearr[sp][llo+1:luo]-wavearr[sp][llo:luo-1]) ))
@@ -93,6 +154,10 @@ def make_plots_all(slf, model=None):
 					ticklabl.append(tticklabl[j])
 			po_twarr[numone].append(tickwave)
 			po_tlarr[numone].append(ticklabl)
+			# Determine the fitted regions
+			wft = np.where((wavearr[sp][llo:luo] >= slf._posnfit[sp][2*sn+0]) & (wavearr[sp][llo:luo] <= slf._posnfit[sp][2*sn+1]))
+			wftA= np.in1d(wavearr[sp][llo:luo][wft], slf._wavefit[sp])
+			po_ftarr[numone].append(wftA)
 			snips_done += 1
 			numone += 1
 			pltlst[sp] += 1
@@ -159,6 +224,12 @@ def make_plots_all(slf, model=None):
 			# Determine the number of panels for this page
 			sp = snpid[snips_done]
 			sn = pltlst[sp]
+			"""
+				w = np.where((x[sp][ll:lu] >= self._posnfit[sp][2*sn+0]) & (x[sp][ll:lu] <= self._posnfit[sp][2*sn+1]))
+				wA= np.in1d(x[sp][ll:lu][w], self._wavefit[sp])
+				wB= np.where(wA==True)
+				enf[sp] = stf[sp] + x[sp][ll:lu][w][wB]
+			"""
 			if subids[sp][sn] == 0:
 				po_disps.append([])
 				po_wvarr.append([])
@@ -171,6 +242,7 @@ def make_plots_all(slf, model=None):
 				po_yrange.append([])
 				po_twarr.append([])
 				po_tlarr.append([])
+				po_ftarr.append([])
 				llo=posnarr[sp][sn]
 				luo=posnarr[sp][sn+1]
 				po_disps[numone].append(0.5*np.append( (wavearr[sp][llo+1]-wavearr[sp][llo]), (wavearr[sp][llo+1:luo]-wavearr[sp][llo:luo-1]) ))
@@ -196,6 +268,10 @@ def make_plots_all(slf, model=None):
 						ticklabl.append(tticklabl[k])
 				po_twarr[numone].append(tickwave)
 				po_tlarr[numone].append(ticklabl)
+				# Determine the fitted regions
+				wft = np.where((wavearr[sp][llo:luo] >= slf._posnfit[sp][2*sn+0]) & (wavearr[sp][llo:luo] <= slf._posnfit[sp][2*sn+1]))
+				wftA= np.in1d(wavearr[sp][llo:luo][wft], slf._wavefit[sp])
+				po_ftarr[numone].append(wftA)
 				snips_done += 1
 				numone += 1
 				pltlst[sp] += 1
@@ -219,6 +295,7 @@ def make_plots_all(slf, model=None):
 				ps_yrange.append([])
 				ps_twarr.append([])
 				ps_tlarr.append([])
+				ps_ftarr.append([])
 #				ps_cparr.append([])
 				if panels_left <= panppg: pgcnt = numsub-subpnl_done
 				else: pgcnt = panppg
@@ -238,6 +315,7 @@ def make_plots_all(slf, model=None):
 						po_yrange.append([])
 						po_twarr.append([])
 						po_tlarr.append([])
+						po_ftarr.append([])
 						llo=posnarr[sp][sn]
 						luo=posnarr[sp][sn+1]
 						po_disps[numone+tnumone].append(0.5*np.append( (wavearr[sp][llo+1]-wavearr[sp][llo]), (wavearr[sp][llo+1:luo]-wavearr[sp][llo:luo-1]) ))
@@ -263,6 +341,10 @@ def make_plots_all(slf, model=None):
 								ticklabl.append(tticklabl[k])
 						po_twarr[numone+tnumone].append(tickwave)
 						po_tlarr[numone+tnumone].append(ticklabl)
+						# Determine the fitted regions
+						wft = np.where((wavearr[sp][llo:luo] >= slf._posnfit[sp][2*sn+0]) & (wavearr[sp][llo:luo] <= slf._posnfit[sp][2*sn+1]))
+						wftA= np.in1d(wavearr[sp][llo:luo][wft], slf._wavefit[sp])
+						po_ftarr[numone+tnumone].append(wftA)
 						snips_done += 1
 						tnumone += 1
 						pltlst[sp] += 1
@@ -307,6 +389,10 @@ def make_plots_all(slf, model=None):
 							ticklabl.append(tticklabl[k])
 					ps_twarr[pgs].append(tickwave)
 					ps_tlarr[pgs].append(ticklabl)
+					# Determine the fitted regions
+					wft = np.where((wavearr[sp][ll:lu] >= slf._posnfit[sp][2*sn+0]) & (wavearr[sp][ll:lu] <= slf._posnfit[sp][2*sn+1]))
+					wftA= np.in1d(wavearr[sp][ll:lu][wft], slf._wavefit[sp])
+					ps_ftarr[pgs].append(wftA)
 					#				ps_cparr[pg].append(comparr[sp][panels_done+i])
 					pltlst[sp] += 1
 				pgs += 1
@@ -316,8 +402,8 @@ def make_plots_all(slf, model=None):
 				panels_left -= panppg
 				pgcnt_arr.append(pgcnt)
 #	ps_nw = [ps_names, ps_waves]
-	ps_wfemc = [ps_wvarr, ps_fxarr, ps_fearr, ps_mdarr, ps_ctarr, ps_zrarr, ps_twarr, ps_tlarr]
-	po_wfemc = [po_wvarr, po_fxarr, po_fearr, po_mdarr, po_ctarr, po_zrarr, po_twarr, po_tlarr]
+	ps_wfemc = [ps_wvarr, ps_fxarr, ps_fearr, ps_mdarr, ps_ctarr, ps_zrarr, ps_twarr, ps_tlarr, ps_ftarr]
+	po_wfemc = [po_wvarr, po_fxarr, po_fearr, po_mdarr, po_ctarr, po_zrarr, po_twarr, po_tlarr, po_ftarr]
 	msgs.info("Prepared {0:d} panels in subplots".format(subpnl_done), verbose=slf._argflag['out']['verbose'])
 	msgs.info("Prepared {0:d} panels in single plots".format(numone), verbose=slf._argflag['out']['verbose'])
 	pticks=[slf._argflag['plot']['ticks'],slf._argflag['plot']['ticklabels']]
@@ -367,6 +453,10 @@ def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, labels=None, num
 			# Plot the data
 			ax.plot(wfemcarr[0][pg][i]+disp[pg][i],wfemcarr[1][pg][i], 'k-', drawstyle='steps')
 			if np.size(w[0]) != 0:
+				# Plot the fitted regions
+				if argflag['plot']['fitregions']:
+					xfr, yfr = get_fitregions(wfemcarr[0][pg][i][w],wfemcarr[4][pg][i][w],wfemcarr[8][pg][i],disp[pg][i][w],size=(ymax-ymin)*dims[0]/3.0)
+					ax.plot(xfr,yfr,'g-',linewidth=2)
 				# Plot the model
 				ax.plot(wfemcarr[0][pg][i][w],wfemcarr[3][pg][i][w], 'r-')
 				# Plot the continuum

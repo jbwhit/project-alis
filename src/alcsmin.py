@@ -2,7 +2,7 @@
 Perform Levenberg-Marquardt least-squares minimization, based on MINPACK-1.
 
 RJC: This is a modified version of MPFIT, which allows CPU multiprocessing
-     and has output designed for ALIS.
+     and has output designed for ALIS, in addition to multiple bug fixes and extensions.
 
 								   AUTHORS
   The original version of this software, called LMFIT, was written in FORTRAN
@@ -12,17 +12,17 @@ RJC: This is a modified version of MPFIT, which allows CPU multiprocessing
   IDL version is:
 	 Craig B. Markwardt, NASA/GSFC Code 662, Greenbelt, MD 20770
 	 craigm@lheamail.gsfc.nasa.gov
-	 UPDATED VERSIONs can be found on my WEB PAGE:
+	 UPDATED VERSIONs can be found on this WEB PAGE:
 		http://cow.physics.wisc.edu/~craigm/idl/idl.html
 	
-  Mark Rivers created this Python version from Craig's IDL version.
+ Mark Rivers created this Python version from Craig's IDL version.
 	Mark Rivers, University of Chicago
 	Building 434A, Argonne National Laboratory
 	9700 South Cass Avenue, Argonne, IL 60439
 	rivers@cars.uchicago.edu
 	Updated versions can be found at http://cars.uchicago.edu/software
  
- Sergey Koposov converted the Mark's Python version from Numeric to numpy
+ Sergey Koposov converted Mark's Python version from Numeric to numpy
 	Sergey Koposov, University of Cambridge, Institute of Astronomy,
 	Madingley road, CB3 0HA, Cambridge, UK
 	koposov@ast.cam.ac.uk
@@ -662,7 +662,7 @@ class alfit(object):
 			while(1):
 
 				# Determine the levenberg-marquardt parameter
-				catch_msg = 'calculating LM parameter (ALFIT_)'
+				catch_msg = 'calculating LM parameter (ALIS_)'
 				[fjac, par, wa1, wa2] = self.lmpar(fjac, ipvt, diag, qtf,
 													 delta, wa1, wa2, par=par)
 				# Store the direction p and x+p. Calculate the norm of p
@@ -709,6 +709,12 @@ class alfit(object):
 									   numpy.abs(maxstep[ifree[whmax]]))
 							if mrat > 1:
 								alpha = alpha / mrat
+
+					# The minimization will fail if the model contains a pegged parameter, and alpha is forced to the machine precision. If this happens, reset alpha to be some small number 100 times the machine precision.
+					if numpy.abs(alpha) < 1.0E6*machep:
+						msgs.warn("A parameter step was out of bounds, and resulted in a scalar close"+msgs.newline()+"to the machine precision")
+						msgs.info("Adopting a small scale factor -- check that the subsequent chi-squared is lower")
+						alpha = 0.1
 
 					# Scale the resulting vector
 					wa1 = wa1 * alpha
@@ -843,6 +849,7 @@ class alfit(object):
 				ratio = 0.0
 				if prered != 0.0:
 					ratio = actred/prered
+#				print ratio, actred, prered
 
 				# Update the step bound
 				if ratio <= 0.25:
@@ -1017,7 +1024,7 @@ class alfit(object):
 		nprint = len(x)
 		if convtest: msgs.test("CONVERGENCE",verbose=verbose)
 		if verbose <= 0: return
-		print "Iter ", ('%6i' % iter),"   CHI-SQUARE = ",('%.10g' % fnorm)," DOF = ", ('%i' % dof)
+		print "ITERATION ", ('%6i' % iter),"   CHI-SQUARED = ",('%.10g' % fnorm)," DOF = ", ('%i' % dof)," (REDUCED = {0:f})".format(fnorm/float(dof))
 		if verbose == 1 or modpass == None:
 			return
 		else:
