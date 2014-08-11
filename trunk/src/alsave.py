@@ -254,14 +254,14 @@ def save_modelfits(slf):
 			else:
 				fnoext = '.'.join(fspl[:-1])+'_fit'
 			an = np.where(fit_fnames == fnoext)
-			if np.size(an) != 0: # The same snip is used more than once as input
+			if np.size(an[0]) != 0: # The same snip is used more than once as input
 				un = np.where(usdtwice == fnoext)
-				if np.size(un) == 0: # First time this snip has been used twice
+				if np.size(un[0]) == 0: # First time this snip has been used twice
 					usdtwice = np.append(usdtwice, fnoext)
 					usdtwind = np.append(usdtwind, 2)
 					usdtwext = np.append(usdtwext, fspl[-1])
 				else: # This snip is seen more than twice
-					usdtwind[un][0] += 1
+					usdtwind[un[0]] += 1
 				# Now that the relevant additions have been made to the arrays, get the index
 				un = np.where(usdtwice == fnoext)
 				fnoext += "%02i" % (usdtwind[un][0])

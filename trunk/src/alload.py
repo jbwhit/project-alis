@@ -872,7 +872,7 @@ def load_fits(filename, colspl, wfe, verbose=2, ext=0, datatype='default'):
 				foundtype = True
 			except:
 				pass
-		elif datatype == 'HIRESredux':
+		elif datatype.lower() in ['hiredux','hiresredux']:
 			try:
 				#if wfe['wave'] != "-1": msgs.warn("You shouldn't need to specify the column of 'wave' for a"+msgs.newline()+"'HIRESredux' fits file", verbose=verbose)
 				# Load the wavelength scale
@@ -882,7 +882,12 @@ def load_fits(filename, colspl, wfe, verbose=2, ext=0, datatype='default'):
 				wrng = np.arange(infile[0].header['naxis1'])
 				wavein = 10.0**((wrng*cdelta)+crvala)
 				fluxin = datain[:]
-				reduxfn = ".".join(filename.split(".")[:-1])[:-1]+"e." + filename.split(".")[-1]
+				if os.path.exists(".".join(filename.split(".")[:-1])[:-1]+"e." + filename.split(".")[-1]):
+					reduxfn = ".".join(filename.split(".")[:-1])[:-1]+"e." + filename.split(".")[-1]
+				elif os.path.exists(".".join(filename.split(".")[:-1])[:-1]+"E." + filename.split(".")[-1]):
+					reduxfn = os.path.exists(".".join(filename.split(".")[:-1])[:-1]+"E." + filename.split(".")[-1])
+				else:
+					msgs.error("Unable to load error spectrum for HIREDUX file:"+msgs.newline()+filename)
 				intemp = pyfits.open(reduxfn)
 				derrin = intemp[ext].data
 				fluein = derrin[:]
