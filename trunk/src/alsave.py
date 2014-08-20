@@ -215,10 +215,10 @@ def save_onefits(fname, slf):
 def save_modelfits(slf):
 	msgs.info("Writing out the model fits", verbose=slf._argflag['out']['verbose'])
 	stf = 0
-	fit_fnames = np.array([])
-	fnames = np.array([])
+	fit_fnames = np.array([]).astype(np.str)
+	fnames = np.array([]).astype(np.str)
 #	stf, enf = [0 for all in slf._posnfull], [0 for all in slf._posnfull]
-	usdtwice, usdtwind, usdtwext = np.array([]), np.array([]).astype(np.int64), np.array([]).astype(np.str)
+	usdtwice, usdtwind, usdtwext = np.array([]).astype(np.str), np.array([]).astype(np.int64), np.array([]).astype(np.str)
 	if slf._argflag['out']['onefits']: wvarr, fxarr, erarr, mdarr = [], [], [], []
 	# If we are generating fakedata, find the peak value of the model
 	if slf._argflag['generate']['data'] and slf._argflag['generate']['peaksnr'] > 0.0:

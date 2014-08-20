@@ -413,8 +413,8 @@ def load_data(slf, datlines, data=None):
 	# Now begin
 	specid=np.array([])
 	slf._snipid=[]
-	datopt = dict({'specid':[],'fitrange':[],'plotone':[],'nsubpix':[],'bintype':[],'columns':[],'systematics':[],'systmodule':[],'label':[],'yrange':[]})
-	keywords = ['specid','fitrange','systematics','systmodule','resolution','shift','columns','plotone','nsubpix','bintype','loadall','label','yrange']
+	datopt = dict({'specid':[],'fitrange':[],'loadrange':[],'plotone':[],'nsubpix':[],'bintype':[],'columns':[],'systematics':[],'systmodule':[],'label':[],'yrange':[]})
+	keywords = ['specid','fitrange','loadrange','systematics','systmodule','resolution','shift','columns','plotone','nsubpix','bintype','loadall','label','yrange']
 	colallow = np.array(['wave','flux','error','continuum','zerolevel','fitrange','systematics','resolution'])
 	columns  = np.array(['wave','flux','error'])
 	systload = [None, 'continuumpoly']
@@ -461,9 +461,21 @@ def load_data(slf, datlines, data=None):
 							wavemin, wavemax = float(fitspl[0]), float(fitspl[1])
 						except:
 							msgs.error("read data has bad 'fitrange' wavelength range: "+msgs.newline()+linspl[0])
-						if wavemax <= wavemin: msgs.error("Upper limit on wavelength should be > lower limit for:"+msgs.newline()+datlines[i])
+						if wavemax <= wavemin: msgs.error("Upper limit on fitrange wavelength should be > lower limit for:"+msgs.newline()+datlines[i])
 					elif len(fitspl) == 1: pass
 					else: msgs.error("read data has bad 'fitrange' wavelength range: "+msgs.newline()+linspl[0])
+				elif kwdspl[0] == 'loadrange':
+					fitspl = kwdspl[1].strip('[]()').split(',')
+					if fitspl != ['all'] and np.size(np.shape(fitspl)) != 1:
+						msgs.error("read data 'loadrange' cannot have the value: "+colspl[k])
+					if len(fitspl) == 2:
+						try:
+							lwavemin, lwavemax = float(fitspl[0]), float(fitspl[1])
+						except:
+							msgs.error("read data has bad 'loadrange' wavelength range: "+msgs.newline()+linspl[0])
+						if lwavemax <= lwavemin: msgs.error("Upper limit on loadrange wavelength should be > lower limit for:"+msgs.newline()+datlines[i])
+					elif len(fitspl) == 1: pass
+					else: msgs.error("read data has bad 'loadrange' wavelength range: "+msgs.newline()+linspl[0])
 				elif kwdspl[0] == 'systematics':
 					systfrom=kwdspl[1]
 					if kwdspl[1] != 'columns' and kwdspl[1].lower() != 'none':
@@ -513,6 +525,7 @@ def load_data(slf, datlines, data=None):
 		datopt['yrange'].append([])
 		datopt['specid'].append([])
 		datopt['fitrange'].append([])
+		datopt['loadrange'].append([])
 		snipnames.append([])
 		posnfull.append([])
 		wavefull.append( np.array([]) )
@@ -548,8 +561,10 @@ def load_data(slf, datlines, data=None):
 		uselabel  = ''
 		specidtxt = ''
 		fitrtxt   = ''
+		loadrtxt   = ''
 		yrngtxt   = ''
 		wavemin, wavemax = None, None
+		lwavemin, lwavemax = None, None
 		nspix = slf._argflag['run']['nsubpix']
 		bntyp = slf._argflag['run']['bintype']
 		tempresn = 'vfwhm(0.0)' # If Resolution not specified set it to zero and make it not tied to anything
@@ -588,6 +603,16 @@ def load_data(slf, datlines, data=None):
 					elif fitspl == ['columns']:
 						wavemin, wavemax = -2.0, -2.0
 					else: msgs.bug("specified 'fitrange' is not allowed on line -"+msgs.newline()+datlines[i],verbose=slf._argflag['out']['verbose'])
+				elif kwdspl[0] == 'loadrange':
+					loadrtxt = linspl[j]
+					fitspl = kwdspl[1].strip('[]()').split(',')
+					if len(fitspl) == 2:
+						lwavemin, lwavemax = np.float64(fitspl[0]), np.float64(fitspl[1])
+					elif fitspl == ['all']:
+						lwavemin, lwavemax = -1.0, -1.0
+#					elif fitspl == ['columns']:
+#						lwavemin, lwavemax = -2.0, -2.0
+					else: msgs.bug("specified 'loadrange' is not allowed on line -"+msgs.newline()+datlines[i],verbose=slf._argflag['out']['verbose'])
 				elif kwdspl[0] == 'systematics':
 					if kwdspl[1] == 'columns': pass
 					else: systfile = kwdspl[1]
@@ -602,7 +627,7 @@ def load_data(slf, datlines, data=None):
 						clspid = colspl[k].strip().split(':')
 						if len(clspid)==2: wfe[clspid[0].strip()] = np.int(clspid[1].strip())
 						else: wfe[clspid[0].strip()] = k
-				elif kwdspl[0] == 'plotone' and kwdspl[1] in ['True','true','TRUE']:
+				elif kwdspl[0] == 'plotone' and kwdspl[1].lower() == 'true':
 					setplot = True # Force this plot to be shown by itself
 				elif kwdspl[0] == 'label':
 					uselabel = kwdspl[1]
@@ -622,9 +647,11 @@ def load_data(slf, datlines, data=None):
 						yrngmin, yrngmax = None, None
 					else: msgs.bug("specified 'yrange' is not allowed on line -"+msgs.newline()+datlines[i],verbose=slf._argflag['out']['verbose'])
 				elif kwdspl[0] == 'loadall' and kwdspl[1] in ['True','true','TRUE']:
-					loadall = True # Force this plot to be shown by itself
+					msgs.warn("The command 'loadall' is deprecated"+msgs.newline()+"Please use loadrange=all")
+					msgs.info("Loading the entire wavelength range")
+					lwavemin, lwavemax = -1.0, -1.0
 		if wavemin is None or wavemax is None:
-			msgs.error("A wavelength range has not been specified")
+			msgs.error("A fitted wavelength range has not been specified")
 #		if True:
 		try:
 			# Check first if we are supposed to generate our own data
@@ -640,20 +667,26 @@ def load_data(slf, datlines, data=None):
 						msgs.warn("The following file does not exist:"+msgs.newline()+filename,verbose=slf._argflag['out']['verbose'])
 					msgs.info("Generating a wavelength array for this file",verbose=slf._argflag['out']['verbose'])
 					# Do some checks
-					if wavemin < 0.0 or wavemax < 0.0:
+					if lwavemin is None or lwavemax is None:
+						if wavemin is None or wavemax is None:
+							msgs.error("When generating data, use the loadrange command to specify"+msgs.newline()+"the wavelength range of the generated data")
+						else:
+							lwavemin = wavemin
+							lwavemax = wavemax
+					if lwavemin < 0.0 or lwavemax < 0.0:
 						msgs.error("Please check the minimum and maximum wavelength ranges")
 					# Generate the data
 #					if slf._argflag['generate']['peaksnr'] <= 0.0: nsr = 0.0 # Noise-to-signal ratio
 #					else: nsr = 1.0/slf._argflag['generate']['peaksnr']
 					if bntyp == 'km/s':
-						npix = 1.0+np.ceil(np.log10(wavemax/wavemin)/np.log10(1.0+slf._argflag['generate']['pixelsize']/299792.458))
-						wavein = wavemin*(1.0+slf._argflag['generate']['pixelsize']/299792.458)**np.arange(npix)
+						npix = 1.0+np.ceil(np.log10(lwavemax/lwavemin)/np.log10(1.0+slf._argflag['generate']['pixelsize']/299792.458))
+						wavein = lwavemin*(1.0+slf._argflag['generate']['pixelsize']/299792.458)**np.arange(npix)
 						fluxin = np.zeros(wavein.size)
 						fluein = np.zeros(wavein.size)
 						contin, zeroin, systin, fitrin = np.zeros(wavein.size), np.zeros(wavein.size), np.zeros(wavein.size), np.ones(wavein.size)
 					elif bntyp == 'A':
-						npix = 1.0 + np.ceil((wavemax-wavemin)/slf._argflag['generate']['pixelsize'])
-						wavein = wavemin + slf._argflag['generate']['pixelsize']*np.arange(npix)
+						npix = 1.0 + np.ceil((lwavemax-lwavemin)/slf._argflag['generate']['pixelsize'])
+						wavein = lwavemin + slf._argflag['generate']['pixelsize']*np.arange(npix)
 						fluxin = np.zeros(wavein.size)
 						fluein = np.zeros(wavein.size)
 						contin, zeroin, systin, fitrin = np.zeros(wavein.size), np.zeros(wavein.size), np.zeros(wavein.size), np.ones(wavein.size)
@@ -678,6 +711,7 @@ def load_data(slf, datlines, data=None):
 		datopt['plotone'][sind].append(setplot)
 		datopt['label'][sind].append(uselabel)
 		datopt['fitrange'][sind].append(fitrtxt)
+		datopt['loadrange'][sind].append(loadrtxt)
 		datopt['yrange'][sind].append(yrngtxt)
 		datopt['columns'][sind].append(wfe)
 		datopt['bintype'][sind].append(bntyp)
@@ -691,22 +725,37 @@ def load_data(slf, datlines, data=None):
 		# Put the data to be used for the chi-squared into a single array
 		if wavemin == -1.0:
 			wf = np.arange(wavein.size)
-			w  = np.arange(wavein.size)
 			wavemin, wavemax = np.min(wavein), np.max(wavein)
 		elif wavemin == -2.0:
 			wf = np.where(fitrin != 0.0)
-			fspl = tempresn.strip(')').split('(')
-			pars=fspl[1].split(',')
-			wavemin, wavemax = np.min(wavein[wf]), np.max(wavein[wf])
-			wvmnres, wvmxres = slf._funcarray[1][fspl[0]].getminmax(slf._funcarray[2][fspl[0]], pars, [wavemin,wavemax])
-			w  = np.where((wavein >= wvmnres) & (wavein <= wvmxres))
 		else:
 			wf = np.where((wavein >= wavemin) & (wavein <= wavemax))
+		# Specify the loaded data
+		if lwavemin == -1.0:
+			w  = np.arange(wavein.size)
+			lwavemin, lwavemax = np.min(wavein), np.max(wavein)
+		elif lwavemin == -2.0:
 			fspl = tempresn.strip(')').split('(')
 			pars=fspl[1].split(',')
-			wvmnres, wvmxres = slf._funcarray[1][fspl[0]].getminmax(slf._funcarray[2][fspl[0]], pars, [wavemin,wavemax])
+			lwavemin, lwavemax = np.min(wavein[wf]), np.max(wavein[wf])
+			wvmnres, wvmxres = slf._funcarray[1][fspl[0]].getminmax(slf._funcarray[2][fspl[0]], pars, [lwavemin,lwavemax])
 			w  = np.where((wavein >= wvmnres) & (wavein <= wvmxres))
-		if loadall: w = np.arange(wavein.size) # If this keyword was set, load all data from this file
+		else:
+			# Perform a check on the loaded wavelength range
+			if lwavemin is None or lwavemax is None:
+				lwavemin = wavemin
+				lwavemax = wavemax
+			if lwavemin > wavemin:
+				msgs.warn("The minimum wavelength loaded should be less than the minimum fitted wavelength")
+				lwavemin = wavemin
+			if lwavemax < wavemax:
+				msgs.warn("The maximum wavelength loaded should be greater than the maximum fitted wavelength")
+				lwavemax = wavemax
+			fspl = tempresn.strip(')').split('(')
+			pars=fspl[1].split(',')
+			wvmnres, wvmxres = slf._funcarray[1][fspl[0]].getminmax(slf._funcarray[2][fspl[0]], pars, [lwavemin,lwavemax])
+			w  = np.where((wavein >= wvmnres) & (wavein <= wvmxres))
+#		if loadall: w = np.arange(wavein.size) # If this keyword was set, load all data from this file
 		if np.size(w) == 0:
 			msgs.error("No data was found within the fitrange limits for the file -"+msgs.newline()+filename)
 		datopt['nsubpix'][sind].append( nspix*get_binsize(wavein[w],bintype=bntyp,verbose=slf._argflag['out']['verbose']) )
@@ -856,16 +905,16 @@ def load_fits(filename, colspl, wfe, verbose=2, ext=0, datatype='default'):
 	except:
 		pass # This is not an ALIS fits file.
 	if not foundtype:
-		if datatype in ['default','UVESpopler']:
+		if datatype.lower() in ['default','uvespopler']:
 			try:
 				#if wfe['wave'] != "-1": msgs.warn("You shouldn't need to specify the column of 'wave' for a"+msgs.newline()+"'default' fits file", verbose=verbose)
 				# Load the wavelength scale
-				crvala=infile[0].header['crval1']
-				cdelta=infile[0].header['cdelt1']
-				crpixa=infile[0].header['crpix1']
-				cdelt_alta=infile[0].header['cd1_1']
+				crvala=infile[ext].header['crval1']
+				cdelta=infile[ext].header['cdelt1']
+				crpixa=infile[ext].header['crpix1']
+				cdelt_alta=infile[ext].header['cd1_1']
 				if cdelta == 0.0: cdelta = cdelt_alta
-				pixscalea=infile[0].header['cdelt1']
+				pixscalea=infile[ext].header['cdelt1']
 				wrng = np.arange(datain.shape[1])
 				wavein = 10.0**(((wrng - (crpixa - 1))*cdelta)+crvala)
 				fluxin, fluein = datain[wfe['flux'],:], datain[wfe['error'],:]
@@ -876,16 +925,16 @@ def load_fits(filename, colspl, wfe, verbose=2, ext=0, datatype='default'):
 			try:
 				#if wfe['wave'] != "-1": msgs.warn("You shouldn't need to specify the column of 'wave' for a"+msgs.newline()+"'HIRESredux' fits file", verbose=verbose)
 				# Load the wavelength scale
-				crvala=infile[0].header['crval1']
-				cdelta=infile[0].header['cdelt1']
-				pixscalea=infile[0].header['cdelt1']
-				wrng = np.arange(infile[0].header['naxis1'])
+				crvala=infile[ext].header['crval1']
+				cdelta=infile[ext].header['cdelt1']
+				pixscalea=infile[ext].header['cdelt1']
+				wrng = np.arange(infile[ext].header['naxis1'])
 				wavein = 10.0**((wrng*cdelta)+crvala)
 				fluxin = datain[:]
 				if os.path.exists(".".join(filename.split(".")[:-1])[:-1]+"e." + filename.split(".")[-1]):
 					reduxfn = ".".join(filename.split(".")[:-1])[:-1]+"e." + filename.split(".")[-1]
 				elif os.path.exists(".".join(filename.split(".")[:-1])[:-1]+"E." + filename.split(".")[-1]):
-					reduxfn = os.path.exists(".".join(filename.split(".")[:-1])[:-1]+"E." + filename.split(".")[-1])
+					reduxfn = ".".join(filename.split(".")[:-1])[:-1]+"E." + filename.split(".")[-1]
 				else:
 					msgs.error("Unable to load error spectrum for HIREDUX file:"+msgs.newline()+filename)
 				intemp = pyfits.open(reduxfn)
@@ -900,9 +949,9 @@ def load_fits(filename, colspl, wfe, verbose=2, ext=0, datatype='default'):
 		msgs.info("An input fits file is not the default format", verbose=verbose)
 		msgs.error("Please specify the type of fits file with run+datatype")
 	# Read in the other columns of data
-	if datatype not in ["HIRESredux"]: ncols = datain.shape[1]
+	if datatype.lower() not in ["hiresredux","hiredux"]: ncols = datain.shape[1]
 	else: ncols = 1
-	if len(colspl) > ncols and datatype not in ["HIRESredux"]:
+	if len(colspl) > ncols and datatype.lower() not in ["hiresredux","hiredux"]:
 		msgs.error("The following file -"+msgs.newline()+filename+msgs.newline()+"only has "+str(ncols)+" columns")
 	# Read in the continuum
 	if wfe['continuum'] != -1:
