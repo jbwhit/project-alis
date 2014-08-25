@@ -38,6 +38,8 @@ def save_asciifits(fname, slf, arr, model):
 			w = np.where((slf._wavefull[sp][ll:lu] >= slf._posnfit[sp][2*sn+0]) & (slf._wavefull[sp][ll:lu] <= slf._posnfit[sp][2*sn+1]))
 			out[w] = np.in1d(slf._wavefull[sp][ll:lu][w], slf._wavefit[sp]).astype(np.float64)
 			data[:,num] = out
+		elif i == 'loadrange':
+			data[:,num] = np.ones(lu-ll)
 		elif i == 'systematics':
 			data[:,num] = slf._systfull[sp][ll:lu]
 		elif i == 'resolution':
@@ -78,6 +80,8 @@ def save_fitsfits(fname, slf, arr, model):
 			w = np.where((slf._wavefull[sp][ll:lu] >= slf._posnfit[sp][2*sn+0]) & (slf._wavefull[sp][ll:lu] <= slf._posnfit[sp][2*sn+1]))
 			out[w] = np.in1d(slf._wavefull[sp][ll:lu][w], slf._wavefit[sp]).astype(np.float64)
 			data[:,num] = out
+		elif i == 'loadrange':
+			data[:,num] = np.ones(lu-ll)
 		elif i == 'systematics':
 			data[:,num] = slf._systfull[sp][ll:lu]
 		elif i == 'resolution':
@@ -162,6 +166,8 @@ def save_onefits(fname, slf):
 					w = np.where((slf._wavefull[sp][ll:lu] >= slf._posnfit[sp][2*sn+0]) & (slf._wavefull[sp][ll:lu] <= slf._posnfit[sp][2*sn+1]))
 					out[w] = np.in1d(slf._wavefull[sp][ll:lu][w], slf._wavefit[sp]).astype(np.float64)
 					data[:,num] = out
+				elif i == 'loadrange':
+					data[:,num] = np.ones(lu-ll)
 				elif i == 'systematics':
 					data[:,num] = slf._systfull[sp][ll:lu]
 				elif i == 'resolution':
@@ -181,6 +187,7 @@ def save_onefits(fname, slf):
 				hdulist[datnum].header[i[0]]   = i[1]
 			hdulist[datnum].header['filename'] = slf._snipnames[sp][sn]
 			hdulist[datnum].header['fitrange'] = slf._datopt['fitrange'][sp][sn]
+			hdulist[datnum].header['loadrange'] = slf._datopt['loadrange'][sp][sn]
 			hdulist[datnum].header['label']    = slf._datopt['label'][sp][sn]
 			hdulist[datnum].header['nsubpix']  = slf._datopt['nsubpix'][sp][sn]
 			hdulist[datnum].header['plotone']  = slf._datopt['plotone'][sp][sn]
