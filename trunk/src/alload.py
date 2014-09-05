@@ -661,7 +661,7 @@ def load_data(slf, datlines, data=None):
 			if slf._argflag['generate']['data']:
 				if os.path.exists(filename) and not slf._argflag['generate']['overwrite']:
 					msgs.info("Reading in the following file to generate data:"+msgs.newline()+filename,verbose=slf._argflag['out']['verbose'])
-					wavein, fluxin, fluein, contin, zeroin, systin, fitrin = load_datafile(filename, colspl, wfe, verbose=slf._argflag['out']['verbose'])
+					wavein, fluxin, fluein, contin, zeroin, systin, fitrin, loadin = load_datafile(filename, colspl, wfe, verbose=slf._argflag['out']['verbose'])
 				else:
 					if os.path.exists(filename) and slf._argflag['generate']['overwrite']:
 						msgs.warn("Overwriting the following file:"+msgs.newline()+filename,verbose=slf._argflag['out']['verbose'])
@@ -731,6 +731,7 @@ def load_data(slf, datlines, data=None):
 			wavemin, wavemax = np.min(wavein), np.max(wavein)
 		elif wavemin == -2.0:
 			wf = np.where(fitrin != 0.0)
+			wavemin, wavemax = np.min(wavein[wf]), np.max(wavein[wf])
 		else:
 			wf = np.where((wavein >= wavemin) & (wavein <= wavemax))
 		# Specify the loaded data

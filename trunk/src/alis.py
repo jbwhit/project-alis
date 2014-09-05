@@ -927,7 +927,7 @@ def alis(modelfile=None, parlines=[], datlines=[], modlines=[], lnklines=[], dat
 				line_no =  str(traceback.tb_lineno(tb))
 				tb = tb.tb_next
 			filename=filename.split('/')[-1]
-			almsgs.msgs.bug("There appears to be a bug on Line "+line_no+" of "+filename+" with error:"+msgs.newline()+str(ev)+msgs.newline()+"---> please contact the author")
+			msgs.bug("There appears to be a bug on Line "+line_no+" of "+filename+" with error:"+msgs.newline()+str(ev)+msgs.newline()+"---> please contact the author")
 
 def initialise(alispath, verbose=-1):
 	argflag = alload.optarg(alispath, verbose=verbose)
@@ -935,6 +935,7 @@ def initialise(alispath, verbose=-1):
 	slf._argflag = argflag
 	slf._atomic = alload.load_atomic(slf)
 	slf._isonefits = False
+	slf._funcarray = [None, None, None]
 	slf._funcarray[0]=alfunc_base.call(getfuncs=True, verbose=slf._argflag['out']['verbose'])
 	slf._funcarray[1]=alfunc_base.call(verbose=slf._argflag['out']['verbose'])
 	slf._funcarray[2]=alfunc_base.call(prgname=slf._argflag['run']['prognm'], getinst=True, verbose=slf._argflag['out']['verbose'],atomic=slf._atomic)
