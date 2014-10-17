@@ -1,1 +1,7 @@
-None at present!
+numpy version 1.9.0 may not work -- the following error message will be issued:
+
+"assignment destination is read-only"
+
+TEMPORARY SOLUTION: use numpy version 1.8.0
+
+==================================================

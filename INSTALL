@@ -3,7 +3,7 @@ Required packages:
 
 python >= 2.6.5
 
-numpy
+numpy  (version 1.9.0 may not work, as an alternative, install 1.8.0)
 astropy (>= 0.2)
 matplotlib
 cuda (optional)    # You don't need to decide right now, you can download and install cuda
