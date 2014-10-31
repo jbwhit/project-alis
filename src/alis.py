@@ -933,6 +933,7 @@ def initialise(alispath, verbose=-1):
 	argflag = alload.optarg(alispath, verbose=verbose)
 	slf = ClassMain(argflag,getinst=True)
 	slf._argflag = argflag
+	slf._argflag['out']['verbose'] = verbose
 	slf._atomic = alload.load_atomic(slf)
 	slf._isonefits = False
 	slf._funcarray = [None, None, None]
