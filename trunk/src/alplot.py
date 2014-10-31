@@ -531,7 +531,7 @@ def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, labels=None, num
 			#ax.set_yticks((0,0.5,1.0))
 			# Plot the label
 			if argflag['plot']['labels'] and labels is not None:
-				if labels[pg][i] != "": ax.text(wmin+0.09*(wmax-wmin),-flue_med+0.2*(ymax+flue_med),labels[pg][i])
+				if labels[pg][i] != "": ax.text(0.02*dims[0],0.04*dims[1],labels[pg][i],transform=ax.transAxes)
 		pgnum += 1
 	return pgnum
 

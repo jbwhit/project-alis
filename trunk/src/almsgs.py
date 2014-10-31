@@ -31,7 +31,7 @@ class colors:
 
 class msgs:
 	def __init__(self):
-		self._verbose = 2
+		self._verbose = -1
 #		return
 
 	def alisheader(self, prognm, verbose=2):
