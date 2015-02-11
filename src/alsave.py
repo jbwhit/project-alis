@@ -118,9 +118,11 @@ def save_onefits(fname, slf):
 	plines = ''.join(slf._parlines).replace("\t","  ")
 	dlines = ''.join(slf._datlines).replace("\t","  ")
 	mlines = ''.join(slf._modlines).replace("\t","  ")
+	llines = ''.join(slf._lnklines).replace("\t","  ")
 	pcard=pyfits.Card('parlines',','.join([str(ord(c)) for c in plines]))
 	dcard=pyfits.Card('datlines',','.join([str(ord(c)) for c in dlines]))
 	mcard=pyfits.Card('modlines',','.join([str(ord(c)) for c in mlines]))
+	lcard=pyfits.Card('lnklines',','.join([str(ord(c)) for c in llines]))
 	hdu.header.append(pcard)
 	hdu.header.append(dcard)
 	hdu.header.append(mcard)
@@ -470,6 +472,11 @@ def save_model(slf,params,errors,info,printout=True,extratxt=["",""],filename=No
 	# Include an end tag for the model
 	outstring += "model end\n"
 	inputmodl += "#   model end\n#\n\n"
+	# Include the model links
+	if len(slf._lnklines) != 0:
+		outstring += "\nlink read\n"
+		for i in range(len(slf._lnklines)): outstring += slf._lnklines[i]
+		outstring += "link end\n"
 	# Update datlines for the newly derived instrument resolution
 	cnum=0
 	snum=0

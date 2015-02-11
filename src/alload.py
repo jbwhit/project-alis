@@ -1145,7 +1145,7 @@ def load_model(slf, modlines, updateself=True):
 				if len(limspl) != 2: msgs.error("Keyword 'lim' only accepts a two element array on line -"+msgs.newline()+modlines[i])
 				for j in range(2):
 					try:
-						if limspl[j] in ['None','none','NONE']:
+						if limspl[j].lower() == 'none':
 							slf._funcarray[2][mdlspl[1]]._limited[find][j] = 0
 							slf._funcarray[2][mdlspl[1]]._limits[find][j]  = 0.0
 						else:

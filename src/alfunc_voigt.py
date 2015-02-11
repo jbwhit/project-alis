@@ -730,7 +730,7 @@ class Voigt(alfunc_base.Base) :
 								pinfo[level+levadd]['tied'] = ttext
 								breakit = True
 								break
-#			# Now set limits and fixed values
+			# Now set limits and fixed values
 			if mp['mtie'][mnum][i] >= 0: add -= 1
 			elif mp['mtie'][mnum][i] <= -2:
 				pinfo[level+levadd]['limited'] = [0 if j is None else 1 for j in mp['mlim'][mnum][i]]
@@ -742,7 +742,7 @@ class Voigt(alfunc_base.Base) :
 				pinfo[level+levadd]['limits']  = [0.0 if j is None else np.float64(j) for j in mp['mlim'][mnum][i]]
 				pinfo[level+levadd]['fixed']   = mp['mfix'][mnum][i]
 				levadd += 1
-		# Hardwire in the minimum and maximum column density ratio
+		# Hardcode in the minimum and maximum column density ratio
 		if len(mp['mpar'][mnum])==1:
 			pinfo[level]['limited'] = [1,1]
 			pinfo[level]['limits']  = [-14.0,14.0]
