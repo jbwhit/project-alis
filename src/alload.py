@@ -1714,14 +1714,20 @@ def load_tied(p, ptied=None, infl=None):
 			if ptied[i] == '':
 				continue
 			cmd = 'p[' + str(i) + '] = ' + ptied[i]
-			exec(cmd)
+			try:
+				exec(cmd)
+			except:
+				msgs.error("Unable to set a tied parameter to the expression:"+msgs.newline()+ptied[i]+msgs.newline()+"There may be an undefined variable in the links")
 	else:
 		for i in range(len(ptied)):
 			if ptied[i] == '':
 				continue
 			ival, pstr = getis(ptied[i], i, infl)
 			cmd = 'p[' + str(ival) + '] = ' + pstr
-			exec(cmd)
+			try:
+				exec(cmd)
+			except:
+				msgs.error("Unable to set a tied parameter to the expression:"+msgs.newline()+ptied[i]+msgs.newline()+"There may be an undefined variable in the links")
 	return p
 
 def getis(string, ival, infl, retlhs=True):
