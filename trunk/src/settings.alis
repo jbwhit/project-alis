@@ -26,6 +26,7 @@ chisq  maxiter      2000        # Maximum number of iterations before giving up
 # PLOTTING
 plot  labels       False        # Label the lines when plotting?
 plot  fits         True         # Plot the best-fitting model with the data
+plot  residuals    False        # Plot the best-fitting residuals with the data
 plot  pages        all          # Which pages to plot
 plot  ticks        True         # Plot tick marks for each model?
 plot  ticklabels   False        # Plot labels on the tick marks for each model?
@@ -39,6 +40,7 @@ out  fits         False			# Output the best fitting model fits?
 out  onefits      False			# Output the best fitting models to a single fits file?
 out  model        True			# Output the best fitting model parameters?
 out  overwrite    False			# Overwrite existing files when writing out?
+out  plots        ""            # Save the output plots to a pdf file (No output is the argument is "" or "False")?
 out  sm           False			# Generate a SuperMongo plotting script?
 out  verbose      2				# Level of screen output (0 is No screen output, 1 is low level output, 2 is output everything)
 # SIMULATE

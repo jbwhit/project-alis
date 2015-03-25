@@ -10,6 +10,22 @@ from matplotlib import cm as pltcm
 from alutils import getreason
 msgs=almsgs.msgs()
 
+def file_exists(slf, filename):
+	"""
+	Check to see if a file exists before overwriting it
+	"""
+	if slf._argflag['out']['overwrite']: ans='y'
+	else: ans=''
+	if os.path.exists(filename):
+		while ans != 'y' and ans != 'n' and ans !='r':
+			msgs.warn("File %s exists!" % (filename), verbose=slf._argflag['out']['verbose'])
+			ans = raw_input(msgs.input()+"Overwrite? (y/n) or rename? (r) - ")
+			if ans == 'r':
+				fileend=raw_input(msgs.input()+"Enter new filename - ")
+				filename = fileend
+				if os.path.exists(filename): ans = ''
+	return ans, filename
+
 def save_asciifits(fname, slf, arr, model):
 	"""
 	Save the best-fitting model into an ascii file.
