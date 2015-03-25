@@ -175,10 +175,10 @@ def load_settings(fname,verbose=2):
 		"""
 		Initialise the default settings called argflag
 		"""
-		rna = dict({'prognm':'alis.py', 'last_update':'Last updated 12th September 2013', 'atomic':'atomic.xml', 'modname':'model.mod', 'convergence':False, 'convnostop':False, 'convcriteria':0.2, 'datatype':'default', 'limpar':False, 'ncpus':-1, 'ngpus':None, 'nsubpix':5, 'nsubmin':5, 'nsubmax':21, 'warn_subpix':100, 'renew_subpix':False, 'blind':True, 'bintype':'km/s', 'logn':True, 'capvalue':None})
+		rna = dict({'prognm':'alis.py', 'last_update':'Last updated 25th March 2015', 'atomic':'atomic.xml', 'modname':'model.mod', 'convergence':False, 'convnostop':False, 'convcriteria':0.2, 'datatype':'default', 'limpar':False, 'ncpus':-1, 'ngpus':None, 'nsubpix':5, 'nsubmin':5, 'nsubmax':21, 'warn_subpix':100, 'renew_subpix':False, 'blind':True, 'bintype':'km/s', 'logn':True, 'capvalue':None})
 		csa = dict({'miniter':0, 'maxiter':20000, 'atol':1.0E-10, 'xtol':1.0E-10, 'ftol':1.0E-10, 'gtol':1.0E-10, 'fstep':1.0})
-		pla = dict({'dims':'3x3', 'fits':True, 'xaxis':'observed', 'labels':False, 'only':False, 'pages':'all', 'ticks':True, 'ticklabels':False, 'fitregions':False})
-		opa = dict({'model':True, 'fits':False, 'onefits':False, 'overwrite':False, 'sm':False, 'verbose':2, 'reletter':False, 'covar':"", 'convtest':""})
+		pla = dict({'dims':'3x3', 'fits':True, 'residuals':False, 'xaxis':'observed', 'labels':False, 'only':False, 'pages':'all', 'ticks':True, 'ticklabels':False, 'fitregions':False})
+		opa = dict({'model':True, 'plots':'', 'fits':False, 'onefits':False, 'overwrite':False, 'sm':False, 'verbose':2, 'reletter':False, 'covar':"", 'convtest':""})
 		mca = dict({'random':None, 'perturb':None, 'systematics':False, 'beginfrom':"", 'startid':0, 'maxperturb':0.1, 'systmodule':None, 'newstart':True, 'dirname':'sims', 'edgecut':4.0})
 		gna = dict({'pixelsize':2.5, 'data':False, 'overwrite':False, 'peaksnr':0.0, 'skyfrac':0.0})
 		itr = dict({'model':None, 'data':None})
@@ -196,6 +196,7 @@ def load_settings(fname,verbose=2):
 def check_argflag(argflag, curcpu=None):
 	# Make some final corrections to the input parameters
 	argflag['out']['covar'] = argflag['out']['covar'].strip("\"'")
+	argflag['out']['plots'] = argflag['out']['plots'].strip("\"'")
 	argflag['out']['convtest'] = argflag['out']['convtest'].strip("\"'")
 	argflag['sim']['beginfrom'] = argflag['sim']['beginfrom'].strip("\"'")
 	# Check requested CPUs
@@ -1700,10 +1701,10 @@ def load_parinfo(slf):
 				continue
 			if type(slf._modpass['line'][i]) is int:
 				msgs.warn("A parameter that = {0:f} is not within specified limits on line -".format(slf._modpass['p0'][i])+msgs.newline()+slf._modlines[slf._modpass['line'][i]],verbose=slf._argflag['out']['verbose'])
-				msgs.info("Setting this parameter to the limiting value of the model: {0:f}".format(newval))
+				msgs.info("Setting this parameter to the limiting value of the model: {0:f}".format(newval),verbose=slf._argflag['out']['verbose'])
 			else:
 				msgs.warn("A parameter that = {0:f} is not within specified limits on line -".format(slf._modpass['p0'][i])+msgs.newline()+slf._modpass['line'][i],verbose=slf._argflag['out']['verbose'])
-				msgs.info("Setting this parameter to the limiting value of the model: {0:f}".format(newval))
+				msgs.info("Setting this parameter to the limiting value of the model: {0:f}".format(newval),verbose=slf._argflag['out']['verbose'])
 			slf._modpass['p0'][i], parinfo[i]['value'] = newval, newval
 	return parinfo, levadd
 

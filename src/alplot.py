@@ -407,8 +407,15 @@ def make_plots_all(slf, model=None):
 	msgs.info("Prepared {0:d} panels in subplots".format(subpnl_done), verbose=slf._argflag['out']['verbose'])
 	msgs.info("Prepared {0:d} panels in single plots".format(numone), verbose=slf._argflag['out']['verbose'])
 	pticks=[slf._argflag['plot']['ticks'],slf._argflag['plot']['ticklabels']]
-	numpagesA = plot_drawplots(pages-numone, ps_wfemc, pgcnt_arr, ps_disps, dspl, slf._argflag, labels=ps_labels, verbose=slf._argflag['out']['verbose'],plotticks=pticks,yrange=ps_yrange)
-	numpagesB = plot_drawplots(numone, po_wfemc, np.ones(numone).astype(np.int), po_disps, [1,1], slf._argflag, labels=po_labels, numpages=pages-numone, verbose=slf._argflag['out']['verbose'],plotticks=pticks,yrange=po_yrange)
+	if slf._argflag['plot']['fits']:
+		numpagesA = plot_drawplots(pages-numone, ps_wfemc, pgcnt_arr, ps_disps, dspl, slf._argflag, labels=ps_labels, verbose=slf._argflag['out']['verbose'],plotticks=pticks,yrange=ps_yrange)
+		numpagesB = plot_drawplots(numone, po_wfemc, np.ones(numone).astype(np.int), po_disps, [1,1], slf._argflag, labels=po_labels, numpages=pages-numone, verbose=slf._argflag['out']['verbose'],plotticks=pticks,yrange=po_yrange)
+	if slf._argflag['plot']['residuals']:
+		numpagesA = plot_drawresiduals(pages-numone, ps_wfemc, pgcnt_arr, ps_disps, dspl, slf._argflag, labels=ps_labels, verbose=slf._argflag['out']['verbose'],plotticks=pticks,yrange=ps_yrange)
+		numpagesB = plot_drawresiduals(numone, po_wfemc, np.ones(numone).astype(np.int), po_disps, [1,1], slf._argflag, labels=po_labels, numpages=pages-numone, verbose=slf._argflag['out']['verbose'],plotticks=pticks,yrange=po_yrange)
+	if slf._argflag['plot']['fits'] and slf._argflag['plot']['residuals']:
+		numpagesA *= 2
+		numpagesB *= 2
 	msgs.info("Plotted {0:d} pages".format(numpagesA+numpagesB), verbose=slf._argflag['out']['verbose'])
 
 def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, labels=None, numpages=0, verbose=2, plotticks=[True,False], yrange=None):
@@ -535,8 +542,121 @@ def plot_drawplots(pages, wfemcarr, pgcnt, disp, dims, argflag, labels=None, num
 		pgnum += 1
 	return pgnum
 
+def plot_drawresiduals(pages, wfemcarr, pgcnt, disp, dims, argflag, labels=None, numpages=0, verbose=2, plotticks=[True,False], yrange=None):
+	"""
+	Plot the fitting residuals in mxn panels.
+	"""
+	fig = []
+	# Determine which pages should be plotted
+	plotall = False
+	if argflag['plot']['pages'] == 'all': plotall = True
+	else: pltpages = argflag['plot']['pages'].split(',')
+#	mmpltx = np.array([-120.0,120.0])
+	pgnum = 0
+	for pg in range(pages):
+		if not plotall:
+			if str(pg+1+numpages) not in pltpages:
+				msgs.info("Skipping plot page number {0:d}".format(pg+1+numpages), verbose=argflag['out']['verbose'])
+				continue
+		fig.append(plt.figure(figsize=(12.5,10), dpi=80))
+		fig[pgnum].subplots_adjust(hspace=0.1, wspace=0.1, bottom=0.07, top=0.98, left=0.04, right=0.98)
+		for i in range(pgcnt[pg]):
+			w = np.where(wfemcarr[3][pg][i] > -0.5)
+			if np.size(w[0]) == 0:
+#				msgs.warn("There was no model data found for plot page {0:d}, panel {1:d}".format(pg+1,i+1), verbose=argflag['out']['verbose'])
+				modl_min, modl_max = np.min(wfemcarr[1][pg][i]), np.max(wfemcarr[1][pg][i])
+				flue_med = 3.0*np.median(wfemcarr[2][pg][i])
+				res_size = 0.05*(modl_max-modl_min)
+				shift = np.min([modl_min-2.0*res_size, np.min(wfemcarr[5][pg][i])-np.median(wfemcarr[2][pg][i])-2.0*res_size])
+			else:
+				modl_min, modl_max = np.min(wfemcarr[3][pg][i][w]), np.max(wfemcarr[3][pg][i][w])
+				flue_med = 3.0*np.median(wfemcarr[2][pg][i])
+				res_size = 0.05*(modl_max-modl_min)
+				shift = np.min([modl_min-2.0*res_size, np.min(wfemcarr[5][pg][i])-np.median(wfemcarr[2][pg][i][w])-2.0*res_size])
+			ax = fig[pgnum].add_subplot(dims[0],dims[1],i+1)
+			# Plot +/- 3sigma, 2sigma, and 1sigma
+			szarr = wfemcarr[0][pg][i].size
+			ax.fill_between(wfemcarr[0][pg][i],-3.0*np.ones(szarr),3.0*np.ones(szarr),facecolor='0.75')
+			ax.fill_between(wfemcarr[0][pg][i],-2.0*np.ones(szarr),2.0*np.ones(szarr),facecolor='0.50')
+			ax.fill_between(wfemcarr[0][pg][i],-1.0*np.ones(szarr),1.0*np.ones(szarr),facecolor='0.25')
+			# Plot the data
+			if np.size(w[0]) != 0:
+				# Plot the fitted regions
+				if argflag['plot']['fitregions']:
+					xfr, yfr = get_fitregions(wfemcarr[0][pg][i][w],np.zeros(np.size(w[0])),wfemcarr[8][pg][i],disp[pg][i][w],size=3.0*dims[0])
+					ax.plot(xfr,yfr,'g-',linewidth=2)
+				# Plot the residuals
+				ax.plot(wfemcarr[0][pg][i][w]+disp[pg][i][w],(wfemcarr[5][pg][i][w]+wfemcarr[1][pg][i][w]-wfemcarr[3][pg][i][w])/wfemcarr[2][pg][i][w], 'b-', drawstyle='steps', linewidth=1.5, alpha=0.75)
+			if np.size(w[0]) != 0:
+				wmin=1.3*np.min(wfemcarr[0][pg][i][w])-0.3*np.mean(wfemcarr[0][pg][i][w])
+				wmax=1.3*np.max(wfemcarr[0][pg][i][w])-0.3*np.mean(wfemcarr[0][pg][i][w])
+			else:
+				msgs.warn("No model to plot for page {0:d} panel {1:d}".format(pg+1+numpages,i+1)+msgs.newline()+"You might need to check the fitrange for this parameter?", verbose=verbose)
+				wmin=np.min(wfemcarr[0][pg][i])
+				wmax=np.max(wfemcarr[0][pg][i])
+			# Plot tick marks
+			if plotticks[0] == True:
+				for j in range(len(wfemcarr[6][pg][i])):
+					wtc = wfemcarr[6][pg][i][j]
+					ytkmin = -3.0
+					ytkmax = +3.5
+					ax.plot([wtc,wtc],[ytkmin,ytkmax], 'r-')
+					if plotticks[1] == True: # Also plot the tick labels
+						ytkmax += 0.1
+						ax.text(wtc,ytkmax,wfemcarr[7][pg][i][j],horizontalalignment='center',verticalalignment='bottom',rotation='vertical',clip_on=True)
+
+#			for j in range(0,len(comparr[pg][i])/3):
+#				if comparr[pg][i][3*j] == '0': cstr = 'k-'
+#				else: cstr = 'r-'
+#				if argx == 2: # For velocity:
+#					xfact = float(comparr[pg][i][3*j+1])
+#				elif argx == 1: # For rest wave:
+#					xfact = elnw[1][pg][i]*(1.0+float(comparr[pg][i][3*j+1])/299792.458)
+#				else: # For observed wave:
+#					xfact = (1.0+rdshft)*elnw[1][pg][i]*(1.0+float(comparr[pg][i][3*j+1])/299792.458)
+#				ax.plot([xfact,xfact],[1.05,1.15], cstr)
+#				if flags['labels']: ax.text(xfact,1.2,comparr[pg][i][3*j+2],horizontalalignment='center',rotation='vertical',clip_on=True)
+			ax.set_xlim(wmin,wmax)
+			ax.xaxis.set_major_locator(ticker.MaxNLocator(nbins=5))
+			ax.yaxis.set_major_locator(ticker.MaxNLocator(nbins=5))
+#			if argx == 2: ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%5.1f'))
+#			else: ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%6.2f'))
+			ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%6.2f'))
+#			if argflag['plot']['labels']: ymax = np.max([1.0+2.0*flue_med, 2.0])
+#			else: ymax = np.max([1.0+2.0*flue_med, 1.2])
+			# Check if the user has specified the yrange
+			ymin, ymax = -3.5,4.5
+			ax.set_ylim(ymin,ymax)
+			#ax.set_yticks((0,0.5,1.0))
+			# Plot the label
+			if argflag['plot']['labels'] and labels is not None:
+				if labels[pg][i] != "": ax.text(0.02*dims[0],0.04*dims[1],labels[pg][i],transform=ax.transAxes)
+		pgnum += 1
+	return pgnum
+
 def plot_showall():
 	plt.show()
+
+def plot_pdf(slf):
+	msgs.info("Saving a pdf of the data and models", verbose=slf._argflag['out']['verbose'])
+	from matplotlib.backends.backend_pdf import PdfPages
+	import alsave
+	if (slf._argflag['out']['plots'].lower() == 'true'):
+		tfn = slf._argflag['run']['modname']+'.pdf'
+	else:
+		tfn = slf._argflag['out']['plots']
+		if tfn[-4:] != ".pdf": tfn += ".pdf"
+	# Check that the file does not already exist
+	ans, fn = alsave.file_exists(slf, tfn)
+	if ans == 'n':
+		msgs.info("PDF file was not saved", verbose=slf._argflag['out']['verbose'])
+	else:
+		pp = PdfPages(fn)
+		for i in plt.get_fignums():
+			plt.figure(i)
+			pp.savefig()
+		pp.close()
+		msgs.info("Saved a pdf with filename:"+msgs.newline()+fn, verbose=slf._argflag['out']['verbose'])
 
 def prep_arrs(snip_ions, snip_detl, posnfit, verbose=2):
 	"""

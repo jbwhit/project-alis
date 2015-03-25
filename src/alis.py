@@ -650,6 +650,9 @@ class ClassMain:
 			# Go straight to plotting
 			self._fitparams = self._modpass['p0']
 			alplot.make_plots_all(self)
+			plotCasePDF = ((self._argflag['out']['plots'].lower() == 'true') or ((self._argflag['out']['plots'].lower() != 'false') and (self._argflag['out']['plots'] != '')))
+			if plotCasePDF:
+				alplot.plot_pdf(self)
 			fileend=raw_input(msgs.input()+"Press enter to view the fits -")
 			alplot.plot_showall()
 		elif self._argflag['sim']['random'] is not None and self._argflag['sim']['beginfrom'] != "":
@@ -730,10 +733,14 @@ class ClassMain:
 			self, fnames = alsave.save_modelfits(self)
 			self._fitparams = self._modpass['p0']
 			# Plot the results
-			if self._argflag['plot']['fits']:
+			plotCasePDF = ((self._argflag['out']['plots'].lower() == 'true') or ((self._argflag['out']['plots'].lower() != 'false') and (self._argflag['out']['plots'] != '')))
+			if self._argflag['plot']['fits'] or self._argflag['plot']['residuals'] or (plotCasePDF):
 				alplot.make_plots_all(self)
-				null=raw_input(msgs.input()+"Press enter to view the fits -")
-				alplot.plot_showall()
+				if plotCasePDF:
+					alplot.plot_pdf(self)
+				if self._argflag['plot']['fits'] or self._argflag['plot']['residuals']:
+					null=raw_input(msgs.input()+"Press enter to view the fits -")
+					alplot.plot_showall()
 		else:
 			msgs.info("Commencing chi-squared minimisation",verbose=self._argflag['out']['verbose'])
 			m = alfit(myfunct_wrap, self._modpass['p0'], parinfo=parinfo, functkw=fa, funcarray=self._funcarray,
@@ -879,10 +886,18 @@ class ClassMain:
 			if self._argflag['out']['covar'] != "":
 				alsave.save_covar(self, m.covar)
 			# Plot the results
-			if self._argflag['plot']['fits']:
+			plotCasePDF = ((self._argflag['out']['plots'].lower() == 'true') or ((self._argflag['out']['plots'].lower() != 'false') and (self._argflag['out']['plots'] != '')))
+			if self._argflag['plot']['fits'] or self._argflag['plot']['residuals'] or (plotCasePDF):
 				alplot.make_plots_all(self)
-				fileend=raw_input(msgs.input()+"Press enter to view the fits -")
-				alplot.plot_showall()
+				if plotCasePDF:
+					alplot.plot_pdf(self)
+				if self._argflag['plot']['fits'] or self._argflag['plot']['residuals']:
+					null=raw_input(msgs.input()+"Press enter to view the fits -")
+					alplot.plot_showall()
+#			if self._argflag['plot']['fits']:
+#				alplot.make_plots_all(self)
+#				fileend=raw_input(msgs.input()+"Press enter to view the fits -")
+#				alplot.plot_showall()
 			msgs.info("Total fitting time in hours: %s" % ((self._tend - self._tstart)/3600.0),verbose=self._argflag['out']['verbose'])
 			# If simulations were requested, do them now
 			if self._argflag['sim']['random'] != None:
@@ -945,11 +960,11 @@ def initialise(alispath, verbose=-1):
 if __name__ == "__main__":
 	debug = False # There are two instances of this (one is in alis just above)
 	if debug:
-		msgs.bug("Read in resolution from column of data")
-		msgs.bug("With voigt function, if the user says to put an O I profile in specid A, make sure there is actually an O I line in specid A.")
-		msgs.bug("Prepare a separate .py file for user-created functions")
-		msgs.bug("Assign a number to every warning and error -- describe this in the manual")
-		msgs.bug("If emission is not specified for a specid before absorption (in a model with several specid's), the specid printed as an error is always one before")
+		msgs.bug("Read in resolution from column of data",verbose=2)
+		msgs.bug("With voigt function, if the user says to put an O I profile in specid A, make sure there is actually an O I line in specid A.",verbose=2)
+		msgs.bug("Prepare a separate .py file for user-created functions",verbose=2)
+		msgs.bug("Assign a number to every warning and error -- describe this in the manual",verbose=2)
+		msgs.bug("If emission is not specified for a specid before absorption (in a model with several specid's), the specid printed as an error is always one before",verbose=2)
 		argflag = alload.optarg(os.path.realpath(__file__), argv=sys.argv[1:])
 		# Assign filelist:
 #		if sys.argv[-1].split('.')[-1] != 'mod': alload.usage(argflag)
@@ -973,5 +988,7 @@ if __name__ == "__main__":
 				line_no =  str(traceback.tb_lineno(tb))
 				tb = tb.tb_next
 			filename=filename.split('/')[-1]
-			msgs.bug("There appears to be a bug on Line "+line_no+" of "+filename+" with error:"+msgs.newline()+str(ev)+msgs.newline()+"---> please contact the author")
+			msgs.bug("There appears to be a bug on Line "+line_no+" of "+filename+" with error:"+msgs.newline()+str(ev)+msgs.newline()+"---> please contact the author",verbose=2)
+		except:
+			msgs.bug("There appears to be an undefined (and therefore unhelpful) bug"+msgs.newline()+"---> please contact the author",verbose=2)
 
